@@ -126,6 +126,34 @@ curl -fsSL https://raw.githubusercontent.com/vgozalov/skills/main/install.sh | b
 | <img src="./assets/marker-parallel-briefs.svg" width="44" alt=""><br>[**parallel-briefs**](./skills/parallel-briefs/SKILL.md)                                  | Splits work across several agents outside a plan. Each gets a brief: your files, do not touch, read first, and what to do when shared code is missing.                                               |
 | <img src="./assets/marker-wrap-up.svg" width="44" alt=""><br>[**wrap-up**](./skills/wrap-up/SKILL.md)                                                          | Ends a session: feedback, learnings, the day's memory file, a one-line "Last Session" pointer, and the docs commit.                                                                                  |
 | <img src="./assets/marker-create-sprint.svg" width="44" alt=""><br>[**create-sprint**](./skills/create-sprint/SKILL.md)                                        | Turns a written plan into a verification sprint, a `prod.json` acceptance harness, from its bundled example.                                                                                         |
+| [**model-routing**](./skills/model-routing/SKILL.md) | Picks the model for each delegated job across Claude and ChatGPT (Codex): the cheapest tier that can do it, never above the conductor's own model, on the account with the most usage left. Ships usage and Codex-launch scripts. |
+
+## The conductor agent
+
+[`agents/conductor.md`](./agents/conductor.md) is a Claude Code agent that delivers a feature through subagents and Codex jobs and never codes itself: research, plan, plan review, your approval, parallel build, whole-branch review, report with token costs. It routes every job with `model-routing`, plans with `parallel-plans`, and builds with `parallel-briefs` or `parallel-agent-development`, so install those skills first.
+
+The `skills` CLI installs skills, not agents, so copy the agent yourself:
+
+```bash
+mkdir -p ~/.claude/agents && cp agents/conductor.md ~/.claude/agents/   # every project
+# or: mkdir -p .claude/agents && cp agents/conductor.md .claude/agents/ # one project
+claude --agent conductor        # or ask any session to "act as my conductor"
+```
+
+It defaults to Opus; started on Sonnet it runs as a Sonnet conductor with a lower ceiling.
+
+<details>
+<summary><b>What model-routing needs on the machine</b></summary>
+<br>
+
+- `python3` for the two scripts in `skills/model-routing/scripts/`.
+- The `claude` CLI, logged in with a Claude subscription: Claude usage is read from `claude -p "/usage"`, a local command that spends no tokens.
+- For ChatGPT workers, the Codex CLI (`codex`) logged in with ChatGPT. Usage is read from its local app-server, and jobs run through `codex exec`. Without Codex the skill still routes everything to Claude.
+- Keep project rules in `AGENTS.md` with `CLAUDE.md` symlinked to it, so Claude and Codex workers load the same rules without them being pasted into every brief.
+- Codex jobs are saved sessions; list them with `codex resume --all --include-non-interactive`.
+- Optional: `"idleCompaction": false` in `~/.claude/settings.json` stops Claude Code compacting a long conductor session while it waits on workers.
+
+</details>
 
 ## Parallel waves
 
