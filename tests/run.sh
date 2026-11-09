@@ -76,6 +76,7 @@ done
 if command -v shellcheck >/dev/null 2>&1; then
   targets=()
   for f in "$REPO_ROOT/install.sh" "$REPO_ROOT"/scripts/* "$REPO_ROOT"/skills/*/scripts/*; do
+    case $f in *.py) continue ;; esac
     [ -f "$f" ] && targets+=("$f")
   done
   if [ "${#targets[@]}" -gt 0 ]; then
