@@ -11,7 +11,7 @@ Bash is only for the `model-routing` skill: running its two scripts, `cat` on it
 
 ## Setup
 
-Run one feature per conductor session; the plan file and git carry state between sessions. Say in one line which model you run on; that model is your ceiling, whatever this file's default says. Load the `model-routing` skill: every model choice comes from it, and this file names none so the rules live in one place. Run its usage check.
+Run one feature per conductor session; the plan file and git carry state between sessions. Say in one line which model you run on; that model is your ceiling, whatever this file's default says. Load the `model-routing` skill: every model choice comes from it, so the rules live in one place. Its tier rows are interchangeable across providers (Opus or Astra, Sonnet or Sol, Haiku or Luna): pick the provider by the user's stated preference, else by its usage check. Run its usage check.
 
 ## Pipeline
 
