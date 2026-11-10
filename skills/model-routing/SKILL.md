@@ -13,18 +13,22 @@ Each spawn is three decisions: the tier (from the job), the ceiling (from your o
 
 ## Tiers and ceiling
 
-| Tier | Claude | ChatGPT (Codex) |
-| --- | --- | --- |
-| 1 Light | Haiku | `gpt-6-luna` |
-| 2 Workhorse | Sonnet | `gpt-6.1-sol` |
-| 3 Frontier | Opus | `gpt-6-astra` |
-| 4 Top | Fable | none |
+| Tier        | Claude     | ChatGPT (Codex)                                                   | ChatGPT price, $ per M tokens in / out |
+| ----------- | ---------- | ----------------------------------------------------------------- | -------------------------------------- |
+| 1 Light     | Haiku 5.5  | `gpt-6-luna` (GPT-6 Luna)                                         | 0.10 / 0.50 (matches Haiku 5.5)        |
+| 2 Workhorse | Sonnet 5.5 | `gpt-6.1-sol` (GPT-6.1 Sol; `gpt-6-sol` if the account lacks 6.1) | 2.00 / 10.00 (matches Sonnet 5.5)      |
+| 3 Frontier  | Opus 5.5   | `gpt-6-astra` (GPT-6 Astra)                                       | frontier                               |
+| 4 Top       | Fable      | none                                                              | —                                      |
 
-Same tier counts as equal. Terra and older GPT models are not routed; their tier is unverified. If Codex rejects a slug, tell the user.
+**Each row is interchangeable.** Astra stands in for Opus, Sol for Sonnet, Luna for Haiku, and the other way round: a job routed to a tier may run on either provider, chosen by the user's stated preference, else by usage (below), and a reviewer on one counts the same as on the other. Terra and older GPT models are not routed; their tier is unverified. If Codex rejects a slug, tell the user.
+
+**Observed, not yet tested:** three high-effort Astra plan reviews used a whole ChatGPT 5-hour window (2026-11-10). Whether Sol can take a top-tier role, or Astra at medium effort keeps the quality of high, is unmeasured. Until a side-by-side test settles it, route by the tables as written and report the usage each Astra job cost.
 
 Your own model is the ceiling on both providers: Sonnet allows tiers 1–2, Opus 1–3, Fable 1–4 (tier 4 only with a stated reason, after tier 3 failed or could not settle a call). Read your model from your own context, not the agent file. Never exceed the ceiling silently; say "needs a higher tier" to the user instead.
 
 ## Provider
+
+The user's direction comes first. When the user names a provider for the session or a job ("mostly Claude", "Codex only"), use it at the job's tier; when that provider has no headroom left, ask before switching. Without a direction, the usage check below decides.
 
 Run `python3 <skill folder>/scripts/check-account-usage.py` at intake and at the start of each phase. It reads both accounts without spending a model turn and prints each one's used windows, `headroom` (100 minus the fuller window) and a `pick`: the account with more headroom, Claude when within 10 points, and never an account at 10 or less while the other has room. `"ask"` means one account could not be read: ask the user once.
 
@@ -48,24 +52,24 @@ No flags: tier 1. One or two local flags: tier 2. A flag that is really an unset
 
 "Top" means the highest tier you are permitted, capped at 3.
 
-| Role | Tier |
-| --- | --- |
-| Narrow research, git state, running commands, reading logs, environment diagnosis | 1 |
-| Web research | 2 |
-| Broad research, root cause, design options (the user decides) | top |
-| Plan writer, design already settled by the user | 2 |
-| Plan writer, the plan must decide the design | top |
-| Plan reviewer, routine plan | 2, one agent with both lenses |
-| Plan reviewer, substantial plan | top, one agent; on a Sonnet ceiling, two tier-2 agents with one lens each, one per provider |
-| Implementer, all five questions clean | 1 |
-| Implementer, local decisions remain | 2 |
-| Implementer, flags a tighter spec cannot remove | top, reviewed at top |
-| Per-task review, only for risky tasks (two or more flags, event handling, shared state); otherwise the whole-branch review covers it | implementer's tier, minimum 2 |
-| Whole-branch review | top |
-| Bug fixer (behaviour, framework, layout, async) | 2 |
-| Mechanical fixer (exact edit written out) | 1 |
-| Failing test or build | 2; top if a design flaw |
-| Triage of conflicting findings | top |
+| Role                                                                                                                                 | Tier                                                                                        |
+| ------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------- |
+| Narrow research, git state, running commands, reading logs, environment diagnosis                                                    | 1                                                                                           |
+| Web research                                                                                                                         | 2                                                                                           |
+| Broad research, root cause, design options (the user decides)                                                                        | top                                                                                         |
+| Plan writer, design already settled by the user                                                                                      | 2                                                                                           |
+| Plan writer, the plan must decide the design                                                                                         | top                                                                                         |
+| Plan reviewer, routine plan                                                                                                          | 2, one agent with both lenses                                                               |
+| Plan reviewer, substantial plan                                                                                                      | top, one agent; on a Sonnet ceiling, two tier-2 agents with one lens each, one per provider |
+| Implementer, all five questions clean                                                                                                | 1                                                                                           |
+| Implementer, local decisions remain                                                                                                  | 2                                                                                           |
+| Implementer, flags a tighter spec cannot remove                                                                                      | top, reviewed at top                                                                        |
+| Per-task review, only for risky tasks (two or more flags, event handling, shared state); otherwise the whole-branch review covers it | implementer's tier, minimum 2                                                               |
+| Whole-branch review                                                                                                                  | top                                                                                         |
+| Bug fixer (behaviour, framework, layout, async)                                                                                      | 2                                                                                           |
+| Mechanical fixer (exact edit written out)                                                                                            | 1                                                                                           |
+| Failing test or build                                                                                                                | 2; top if a design flaw                                                                     |
+| Triage of conflicting findings                                                                                                       | top                                                                                         |
 
 A plan is substantial when it decides the design, has more than five tasks, touches auth, permissions, persisted data or shared state, or its tasks carry two or more flags. Otherwise routine.
 
