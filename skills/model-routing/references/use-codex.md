@@ -11,12 +11,16 @@ BRIEF
 
 When notified, `cat` the background output file.
 
-| Role | `--sandbox` | `--effort` |
-| --- | --- | --- |
-| Implementer, fixer | `workspace-write` | `medium` |
-| Plan writer (saves the plan file) | `workspace-write` | `high` |
-| Plan reviewer, whole-branch reviewer | `read-only` | `high` |
-| Researcher, per-task reviewer, fix check | `read-only` | `medium` |
+| Role                                     | `--sandbox`       | `--effort`                                           |
+| ---------------------------------------- | ----------------- | ---------------------------------------------------- |
+| Implementer, fixer                       | `workspace-write` | `medium`                                             |
+| Plan writer (saves the plan file)        | `workspace-write` | `high`                                               |
+| Plan reviewer, whole-branch reviewer     | `read-only`       | `high`; Astra `medium` (SKILL.md, tier 3 on ChatGPT) |
+| Researcher, per-task reviewer, fix check | `read-only`       | `medium`                                             |
+
+Tier 3 runs Astra at `medium` whatever the role says; its fallback is Sol at `high`.
+
+**Committing from a git worktree:** a worktree's git metadata lives in the main checkout's `.git/worktrees/`, outside the `workspace-write` sandbox, so Codex cannot create `index.lock` there and its commit fails; the edits stay in the working tree. Commit them yourself by explicit path after checking `git status`, or run Codex jobs that must commit from the main checkout.
 
 Always pass `--effort`, so the role decides the effort rather than whatever `model_reasoning_effort` the Codex config sets.
 
