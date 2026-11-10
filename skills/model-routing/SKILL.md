@@ -22,7 +22,7 @@ Each spawn is three decisions: the tier (from the job), the ceiling (from your o
 
 **Each row is interchangeable.** Astra stands in for Opus, Sol for Sonnet, Luna for Haiku, and the other way round: a job routed to a tier may run on either provider, chosen by the user's stated preference, else by usage (below), and a reviewer on one counts the same as on the other. Terra and older GPT models are not routed; their tier is unverified. If Codex rejects a slug, tell the user.
 
-**Observed, not yet tested:** three high-effort Astra plan reviews used a whole ChatGPT 5-hour window (2026-11-10). Whether Sol can take a top-tier role, or Astra at medium effort keeps the quality of high, is unmeasured. Until a side-by-side test settles it, route by the tables as written and report the usage each Astra job cost.
+**Tier 3 on ChatGPT (user's default, 2026-11-10):** run Astra at `--effort medium`; when Astra is rate-limited or the ChatGPT window is too low for it, fall back to Sol at `--effort high` for that job. Evidence, one side-by-side test so far: the same whole-branch review run three ways found the same findings each time, at these costs in the 5-hour window: Astra high +8%, Astra medium +7%, Sol high +3% (Sol took twice the steps). Earlier, three high-effort Astra plan reviews used a whole window. Re-run the comparison on the next large review and record the result here before changing this default.
 
 Your own model is the ceiling on both providers: Sonnet allows tiers 1–2, Opus 1–3, Fable 1–4 (tier 4 only with a stated reason, after tier 3 failed or could not settle a call). Read your model from your own context, not the agent file. Never exceed the ceiling silently; say "needs a higher tier" to the user instead.
 
