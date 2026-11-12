@@ -3,7 +3,7 @@
 # that the sdd ownership-check script parses and enforces as documented.
 
 SKILL="$REPO_ROOT/skills/parallel-plans"
-OC="$REPO_ROOT/skills/parallel-agent-development/scripts/ownership-check"
+OC="$REPO_ROOT/skills/parallel-build/scripts/ownership-check"
 
 # make_example_repo: git repo whose plan.md is the SKILL.md ownership example; sets BASE.
 make_example_repo() {
@@ -52,7 +52,7 @@ test_ownership_example_rejects_frozen() {
 
 test_mit_notice_travels_with_derived_skills() {
   local s
-  for s in parallel-agent-development parallel-plans; do
+  for s in parallel-build parallel-plans; do
     [ -f "$REPO_ROOT/skills/$s/LICENSE-third-party.txt" ] || { fail "skills/$s/LICENSE-third-party.txt missing"; return 1; }
     cmp -s "$REPO_ROOT/LICENSES/third-party-MIT.txt" "$REPO_ROOT/skills/$s/LICENSE-third-party.txt" \
       || { fail "skills/$s/LICENSE-third-party.txt differs from LICENSES/third-party-MIT.txt"; return 1; }

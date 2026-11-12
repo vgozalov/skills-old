@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Pins the parallel-wave pathspec behaviour of review-package.
 
-RP="$REPO_ROOT/skills/parallel-agent-development/scripts/review-package"
+RP="$REPO_ROOT/skills/parallel-build/scripts/review-package"
 
 make_repo() {
   git init -q .

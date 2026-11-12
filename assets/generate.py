@@ -572,7 +572,7 @@ def floor(w, y0, h):
 # --------------------------------------------------------------------------------------------
 def emblem(name):
     g, s = C["gold"], 'fill="none" stroke="%s" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"' % C["gold"]
-    if name == "parallel-agent-development":  # a baton leading three parallel tracks
+    if name == "parallel-build":  # a baton leading three parallel tracks
         tracks = "".join('<path d="M 33 %d H 43" %s/>' % (y, s) for y in (11, 22, 33))
         return ('<path d="M 8 41 L 27 22" %s/><circle cx="8" cy="41" r="3.4" fill="%s"/><circle cx="28" cy="21" r="2.2" fill="%s"/>%s'
                 % (s, g, g, tracks))
@@ -601,7 +601,7 @@ def emblem(name):
     raise ValueError(name)
 
 
-SKILLS = ["parallel-plans", "parallel-agent-development", "parallel-briefs", "wrap-up", "create-sprint"]
+SKILLS = ["parallel-plans", "parallel-build", "parallel-briefs", "wrap-up", "create-sprint"]
 
 
 MARKER_DEFS = ('<defs><radialGradient id="lamp" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="#FFC45E" stop-opacity="0.78"/>'

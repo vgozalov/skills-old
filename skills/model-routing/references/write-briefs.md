@@ -19,13 +19,18 @@ Every brief is self-contained: the worker has not seen this conversation. Paste 
 ## Common block
 
 ```
+Run: <run folder>   Task: <task id or ->   Role: <role>
 Repo: <absolute path>   Branch: <branch>   (uncommitted working tree)
 Other agents are editing other files at the same time. Touch only the files under "Your files".
 Read first: <plan/spec path, sections>. <Ignore / Follow> its test steps.
 Do NOT run: <npm run build, npm run lint, eslint, the full test suite, git add, git commit, git push>.
+Skip-worktree files you may touch: <from git-check.py; delete the line when none>. Git does not record their changes, so list every change you make to them in your report.
+Edit files with your edit tool. Never `sed -i` (on macOS `sed -i -E` leaves a `<file>-E` backup beside the file).
 Tests: `npx vitest run <file> --reporter=dot 2>&1 | tail -40`. Read large files by line range.
-Report in under <N> words.
+Report in under <N> words, naming any files you created outside "Your files", temporary and backup files included.
 ```
+
+The first line is the run tag `chief-run.py start` printed; keep it first and exact, for Codex too (`run-codex-job.py` reads it to record the job in the run). It is how the dashboard and the cost report find every agent. Outside a orchestrator run, drop it.
 
 Keep project rules in the repo's `AGENTS.md` (with `CLAUDE.md` symlinked to it) so Claude and Codex both load them automatically, and do not repeat them in briefs. Without that file, add the few rules the job needs. For Codex, add: "Do not commit, push or create branches."
 
@@ -76,7 +81,7 @@ For tier 1, also list every function with its exact behaviour.
 
 ```
 Review the uncommitted tree on <branch> against <plan path> (Decisions, Review Focus). Read-only.
-Check: (1) every import resolves, including named exports in node_modules; (2) files agree on names and shapes; (3) leftovers from removed code; (4) behaviour against each decision; (5) React correctness, polling loops, StrictMode hazards; (6) styling and overflow.
+Check: (1) every import resolves, including named exports in node_modules; (2) files agree on names and shapes; (3) leftovers from removed code; (4) behaviour against each decision; (5) React correctness, polling loops, StrictMode hazards; (6) styling and overflow; (7) git-check.py warnings: <paste>. A test that depends on a skip-worktree change fails on every other checkout.
 At most 12 real problems, most severe first: severity | file:line | problem | how it fails. Then one line of checks that passed, and one on whether the page renders without a runtime error.
 ```
 
@@ -96,8 +101,17 @@ Read-only. PASS or FAIL per finding with file:line; say if a fix broke anything 
 An issue that already exists in the original code (`git show HEAD:<file>`) does not count as a failure.
 ```
 
-## Git steward
+## Git steward (clean-up, only when the user asked for it)
+
+The orchestrator reads git state from `git-check.py` itself; a steward is for changing it.
 
 ```
-Read-only. Report branch, `git status --short`, last 5 commit subjects, whether it is pushed, diffstat against <base>.
+Repo: <path>   Branch: <branch>   Base: <base>
+git-check.py warnings: <paste>
+Do exactly what the user approved, nothing else:
+- Replace the auto-save commits <shas> with one commit, message: <conventional message the user approved>. Use `git reset --soft <commit before the first auto-save>` only when every later commit is in that list; otherwise stop and report. If the branch is pushed, stop and ask before rewriting it.
+- Stage by explicit path. Never `git add -A`, `git add .` or `git commit -a`.
+- Skip-worktree file <path>: commit only the hunks <describe>. `git update-index --no-skip-worktree <path>`, `git add -p <path>`, commit, then `git update-index --skip-worktree <path>`. Never commit a local URL.
+- Delete stray files: <paths>.
+Then run `python3 <skill folder>/scripts/git-check.py` and return its warnings, `git status --short` and `git log --oneline <base>..HEAD`.
 ```

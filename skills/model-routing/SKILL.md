@@ -1,11 +1,11 @@
 ---
 name: model-routing
-description: Use when about to spawn a subagent or Codex job, or when asked how work was routed or what it cost. Picks the model across Claude (Haiku, Sonnet, Opus, Fable) and ChatGPT via Codex (Luna, Sol, Astra), with the conductor's own model as the ceiling, and balances usage between the accounts: the conductor's own provider first, the other once it passes 60% of its 5-hour window. Applies whichever provider conducts (Claude Code, Codex, Gemini).
+description: Use when about to spawn a subagent or Codex job, when checking git state during a delegated run (auto-commit hooks, skip-worktree files, stray backups), or when asked how work was routed or what it cost. Picks the model across Claude (Haiku, Sonnet, Opus, Fable) and ChatGPT via Codex (Luna, Sol, Astra), with the orchestrator's own model as the ceiling, and balances usage between the accounts: the orchestrator's own provider first, the other once it passes 60% of its 5-hour window. Applies whichever provider conducts (Claude Code, Codex, Gemini).
 ---
 
 # Model routing
 
-Choose the cheapest permitted model expected to meet the job's acceptance criteria. Stronger models are for unresolved reasoning, consequential review, or demonstrated failure. Route on the job, not on how important it feels or which model is conducting: a frontier conductor must not make building expensive.
+Choose the cheapest permitted model expected to meet the job's acceptance criteria. Stronger models are for unresolved reasoning, consequential review, or demonstrated failure. Route on the job, not on how important it feels or which model is conducting: a frontier orchestrator must not make building expensive.
 
 Paths below (`scripts/`, `references/`) are relative to this skill's folder: the base directory shown when the skill loads, typically `.claude/skills/model-routing/` in a project or `~/.claude/skills/model-routing/` when installed globally. Run the scripts from the repo root.
 
@@ -24,7 +24,7 @@ Each spawn is three decisions: the tier (from the job), the ceiling (from your o
 
 **Tier 3 on ChatGPT (user's default, 2026-11-10):** run Astra at `--effort medium`; when Astra is rate-limited or the ChatGPT window is too low for it, fall back to Sol at `--effort high` for that job. Evidence, one side-by-side test so far: the same whole-branch review run three ways found the same findings each time, at these costs in the 5-hour window: Astra high +8%, Astra medium +7%, Sol high +3% (Sol took twice the steps). Earlier, three high-effort Astra plan reviews used a whole window. Re-run the comparison on the next large review and record the result here before changing this default.
 
-Your own model is the ceiling on both providers: Sonnet or Sol allows tiers 1–2, Opus or Astra 1–3, Fable 1–4 (tier 4 only with a stated reason, after tier 3 failed or could not settle a call). A conductor on another provider takes the ceiling of the row its model matches in strength. Read your model from your own context, not the agent file. Never exceed the ceiling silently; say "needs a higher tier" to the user instead.
+Your own model is the ceiling on both providers: Sonnet or Sol allows tiers 1–2, Opus or Astra 1–3, Fable 1–4 (tier 4 only with a stated reason, after tier 3 failed or could not settle a call). A orchestrator on another provider takes the ceiling of the row its model matches in strength. Read your model from your own context, not the agent file. Never exceed the ceiling silently; say "needs a higher tier" to the user instead.
 
 ## Provider
 
@@ -32,20 +32,37 @@ Decide in this order:
 
 1. **The user's direction.** When the user names a provider or model for the session or a job ("mostly Claude", "Codex only", "use Astra"), use it at the job's tier; when that account is near its limit, ask before switching.
 2. **Capability.** A job that needs something only one provider has goes there, whatever the usage. Image generation goes to ChatGPT, because Claude cannot generate images.
-3. **Usage balance.** Prefer your own provider: a Claude conductor spawns Claude agents, a Codex conductor ChatGPT jobs. Once your provider has used 60% of its 5-hour window, send new jobs to the other provider; when the other one passes 60% instead, come back. The rest of your own window is the conductor's reserve: you run on that account too, and when it runs dry the whole session stops, however much the other account has left.
+3. **Usage balance.** Prefer your own provider: a Claude orchestrator spawns Claude agents, a Codex orchestrator ChatGPT jobs. Once your provider has used 60% of its 5-hour window, send new jobs to the other provider; when the other one passes 60% instead, come back. The rest of your own window is the orchestrator's reserve: you run on that account too, and when it runs dry the whole session stops, however much the other account has left.
 
-Run `python3 <skill folder>/scripts/check-account-usage.py --conductor <claude|chatgpt|gemini>` at intake and at each new request from the user; inside Claude Code the conductor is detected and the flag can be left out. It reads both accounts without spending a model turn and prints each one's 5-hour and weekly use, a `pick` and the `why`:
+Run `python3 <skill folder>/scripts/check-account-usage.py --orchestrator <claude|chatgpt|gemini>` at intake, at each new request from the user, at each phase start, before each wave of spawns, and after a job stops on a usage limit. A single check at intake does not hold for a long run: the usage moves while the work does. Inside Claude Code the orchestrator is detected and the flag can be left out. It reads both accounts without spending a model turn and prints each one's 5-hour and weekly use, a `pick` and the `why` (and, for a Claude orchestrator, `spawn_hook`: whether the hook below is registered):
 
 - your own provider while it is under 60% of its 5-hour window;
 - otherwise the other provider with room, lowest 5-hour use first; with both past 60%, still the other one, so your reserve holds;
 - an account at 90% of either window, or blocked, only when nothing else has room;
 - `"ask"` when your own account cannot be read or every account is near a limit: ask the user once.
 
-A conductor whose own usage the script cannot read (Gemini today) has no reserve to keep; its jobs go to the provider with the lower 5-hour use.
+A orchestrator whose own usage the script cannot read (Gemini today) has no reserve to keep; its jobs go to the provider with the lower 5-hour use.
 
-In Claude Code, `scripts/usage-before-spawn.py` registered as a PreToolUse hook (the settings snippet is at its top) repeats the check before every Agent spawn and every `run-codex-job.py` launch, and adds one line to your context: both accounts, the pick, and whether this spawn matches it. The hook never blocks: a spawn that differs from the pick is right when rule 1 or 2 put it there, and otherwise a sign to switch.
+In Claude Code, `scripts/usage-before-spawn.py` registered as a PreToolUse hook (the settings snippet is at its top) repeats the check before every Agent spawn and every `run-codex-job.py` launch, and adds one line to your context: both accounts, the pick, and whether this spawn matches it. The hook never blocks: a spawn that differs from the pick is right when rule 1 or 2 put it there, and otherwise a sign to switch. When `spawn_hook` is `missing`, only the checkpoints above guard the switch; tell the user once.
 
 A job that stops on a usage limit is relaunched at the same tier on the other provider. Codex jobs run outside the sandbox, with network, tests and local containers, as a Claude agent does. For Codex jobs, `cat <skill folder>/references/use-codex.md` once per session.
+
+## Git state
+
+Workers share one working tree, so the orchestrator watches what git will and will not record. `python3 <skill folder>/scripts/git-check.py` prints one line of JSON: branch and upstream, Stop hooks that auto-commit, skip-worktree files whose working copy differs from HEAD, stray backup files (`*-E`, `*.orig`, `*.bak`, `*.rej`, `*~`), and auto-save commits since the base. Its `warnings` list only what needs action. Run it with `--start-run` at intake, plain before every review, and with `--end-run` at pause and at report.
+
+| Warning | What goes wrong | Action |
+| --- | --- | --- |
+| Auto-commit Stop hook that does not skip runs | Commits half-finished work from several workers under a generic message | Ask the user to pause it for the run, or to make it skip runs (below) |
+| Skip-worktree file differs from HEAD | `git add` and auto-save ignore it: a worker's fix never reaches a commit, and a test committed for it fails on every other checkout | Name it in the briefs; at report, commit its feature hunks selectively, never a local URL |
+| Stray backup file | `sed -i -E` on macOS leaves `<file>-E`, which auto-save commits | Delete it; the briefs forbid `sed -i` |
+| Auto-save commits on the branch | History breaks the repo's commit-message rule | Offer the user one descriptive conventional commit in their place |
+
+`--start-run` writes a `chief-run` marker inside the git dir (never tracked). A project's auto-save Stop hook skips orchestrator runs when its first line is:
+
+```sh
+[ -e "$(git rev-parse --git-path chief-run)" ] && exit 0
+```
 
 ## Review rule
 
@@ -98,6 +115,6 @@ A plan is substantial when it decides the design, has more than five tasks, touc
 
 ## Token budget
 
-Every worker step re-sends its whole context, so cost grows with steps × context. The four habits that cost most in the first real run: long test output carried forward, whole large files read, fixes resumed on long threads, and per-task reviews duplicating the whole-branch review. The brief templates prevent the first two; the rules above prevent the last two. Use `medium` effort for routine reviews and builds, `high` only for plan review and the whole-branch review. Start a fresh conductor session per feature: the plan file and git carry the state.
+Every worker step re-sends its whole context, so cost grows with steps × context. The four habits that cost most in the first real run: long test output carried forward, whole large files read, fixes resumed on long threads, and per-task reviews duplicating the whole-branch review. The brief templates prevent the first two; the rules above prevent the last two. Use `medium` effort for routine reviews and builds, `high` only for plan review and the whole-branch review. Start a fresh orchestrator session per feature: the plan file and git carry the state.
 
-Before writing a brief: `cat <skill folder>/references/write-briefs.md`. Before the final report: `cat <skill folder>/references/report-costs.md`.
+Before writing a brief: `cat <skill folder>/references/write-briefs.md`. Before the final report: `cat <skill folder>/references/report-costs.md`. API-equivalent prices for both providers live in `<skill folder>/prices.json`; the `chief` skill's run summary and dashboard read them.

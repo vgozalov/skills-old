@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Claude Code PreToolUse hook: before a Claude agent or a Codex job is spawned, add the
-current usage of both accounts and the routing pick to the conductor's context.
+current usage of both accounts and the routing pick to the orchestrator's context.
 
 It never blocks or changes the spawn; some jobs need one provider's model or capability.
 

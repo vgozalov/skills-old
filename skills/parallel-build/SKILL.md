@@ -1,9 +1,9 @@
 ---
-name: parallel-agent-development
-description: Use when executing implementation plans with independent tasks in the current session
+name: parallel-build
+description: Use when an approved plan from parallel-plans (tasks that declare the files they own) is ready to be built by implementer and reviewer agents, in parallel waves where files are disjoint, or when resuming such a build from its ledger or handoff.
 ---
 
-# Subagent-Driven Development
+# Parallel Build
 
 Execute plan by dispatching a fresh implementer subagent per task, a task review (spec compliance + code quality) after each, and a broad whole-branch review at the end.
 
@@ -37,7 +37,7 @@ digraph when_to_use {
     "Have implementation plan?" [shape=diamond];
     "Tasks mostly independent?" [shape=diamond];
     "Partner chose inline, or no subagent tool?" [shape=diamond];
-    "parallel-agent-development" [shape=box];
+    "parallel-build" [shape=box];
     "executing-plans" [shape=box];
     "Manual execution or brainstorm first" [shape=box];
 
@@ -46,7 +46,7 @@ digraph when_to_use {
     "Tasks mostly independent?" -> "Partner chose inline, or no subagent tool?" [label="yes"];
     "Tasks mostly independent?" -> "Manual execution or brainstorm first" [label="no - tightly coupled"];
     "Partner chose inline, or no subagent tool?" -> "executing-plans" [label="yes"];
-    "Partner chose inline, or no subagent tool?" -> "parallel-agent-development" [label="no"];
+    "Partner chose inline, or no subagent tool?" -> "parallel-build" [label="no"];
 }
 ```
 
@@ -85,10 +85,10 @@ digraph process {
 
     "Setup: worktree, ledger check, read plan, pre-flight review" [shape=box];
     "More tasks remain?" [shape=diamond];
-    "Dispatch final code reviewer (../requesting-code-review/code-reviewer.md)" [shape=box];
+    "Dispatch final reviewer (./final-reviewer-prompt.md)" [shape=box];
     "Final findings? ONE fix dispatch, one scoped re-review, adjudicate residuals" [shape=box];
     "Final review clean: delete this plan's workspace" [shape=box];
-    "Use superpowers:finishing-a-development-branch" [shape=box style=filled fillcolor=lightgreen];
+    "Finish the branch (see Finishing)" [shape=box style=filled fillcolor=lightgreen];
 
     "Setup: worktree, ledger check, read plan, pre-flight review" -> "Dispatch implementer subagent (./implementer-prompt.md)";
     "Dispatch implementer subagent (./implementer-prompt.md)" -> "Implementer asks questions?";
@@ -114,19 +114,22 @@ digraph process {
     "Park findings in ledger with rulings" -> "Append completion to ledger, mark todo complete";
     "Append completion to ledger, mark todo complete" -> "More tasks remain?";
     "More tasks remain?" -> "Dispatch implementer subagent (./implementer-prompt.md)" [label="yes"];
-    "More tasks remain?" -> "Dispatch final code reviewer (../requesting-code-review/code-reviewer.md)" [label="no"];
-    "Dispatch final code reviewer (../requesting-code-review/code-reviewer.md)" -> "Final findings? ONE fix dispatch, one scoped re-review, adjudicate residuals";
+    "More tasks remain?" -> "Dispatch final reviewer (./final-reviewer-prompt.md)" [label="no"];
+    "Dispatch final reviewer (./final-reviewer-prompt.md)" -> "Final findings? ONE fix dispatch, one scoped re-review, adjudicate residuals";
     "Final findings? ONE fix dispatch, one scoped re-review, adjudicate residuals" -> "Final review clean: delete this plan's workspace";
-    "Final review clean: delete this plan's workspace" -> "Use superpowers:finishing-a-development-branch";
+    "Final review clean: delete this plan's workspace" -> "Finish the branch (see Finishing)";
 }
 ```
 
 ## Setup
 
-Ensure the work happens in an isolated workspace: use
-superpowers:using-git-worktrees to create one or verify the existing one.
-Never start implementation on a main/master branch without your human
-partner's explicit consent.
+Work on a feature branch; never start implementation on a main/master
+branch without your human partner's explicit consent. When they want the
+build isolated from their checkout, create a worktree:
+`git worktree add .worktrees/<branch> -b <branch> <base>` (add `.worktrees/`
+to `.gitignore` first if it is not ignored), run the project's setup there
+(install dependencies, copy local env files the project documents), and
+confirm the baseline tests pass before the first task.
 
 Conversation memory does not survive compaction. In real sessions,
 controllers that lost their place have re-dispatched entire completed task
@@ -135,7 +138,7 @@ a ledger file, not only in todos.
 
 - Each plan owns a workspace: at skill start, run this skill's
   `bash scripts/sdd-workspace PLAN_FILE` — it prints the plan's git-ignored
-  directory (under `<repo-root>/.superpowers/sdd/`), home to
+  directory (under `<repo-root>/.parallel-build/`), home to
   every artifact for THIS plan: ledger, handoff, briefs, reports, review packages.
   Another plan's directory is never yours to read or write.
 - Check for this plan's ledger at `<workspace>/progress.md`. If its first
@@ -143,7 +146,7 @@ a ledger file, not only in todos.
   — do not re-dispatch them; resume at the first task without one. A task
   whose last line is a fix round is mid-loop: resume the loop at the next
   round. A ledger whose first line names a different plan file — or a stray
-  ledger at the old flat path `.superpowers/sdd/progress.md` — is another
+  ledger at the old flat path `.superpowers/sdd/progress.md` from earlier versions — is another
   plan's progress: leave it in place and start your own, fresh.
 - Create the ledger with its identity as the first line:
   `# SDD ledger — plan: <plan file path>`.
@@ -351,7 +354,7 @@ If a task fails the test, it starts the next wave. Waves are at most four
 tasks. When the file lists are unclear, dispatch serially — an unverifiable
 "different files" is not disjoint.
 
-**Auto-commit hooks.** If the repo has a Stop hook that commits with `git add -A` (check `.claude/settings.json`, `.claude/settings.local.json` and the user settings), do not end your turn while a wave is running: wait for the wave inside the turn. A checkpoint commit made mid-wave mixes tasks' half-finished files, and `ownership-check` rejects it.
+**Auto-commit hooks.** If the repo has a Stop hook that commits with `git add -A` (check `.claude/settings.json`, `.claude/settings.local.json` and the user settings), do not end your turn while a wave is running: wait for the wave inside the turn. A checkpoint commit made mid-wave mixes tasks' half-finished files, and `ownership-check` rejects it. Under a orchestrator, every dispatch's first line is the run tag (`Run: <run folder>   Task: <n>   Role: <role>`, see model-routing's `write-briefs.md`), so the run dashboard and cost report see it. `git-check.py --start-run` (model-routing) marks the run, and a hook whose first line tests `$(git rev-parse --git-path chief-run)` skips it.
 
 Dispatching a wave:
 
@@ -567,8 +570,7 @@ branch started from, e.g. `git merge-base main HEAD`) and include the
 printed path in the final review dispatch, so the final reviewer reads
 one file instead of re-deriving the branch diff with git commands. Dispatch
 on the most capable available model (see Model Selection), using
-superpowers:requesting-code-review's
-[code-reviewer.md](../requesting-code-review/code-reviewer.md). Point it at
+[final-reviewer-prompt.md](./final-reviewer-prompt.md). Point it at
 the ledger's deferred-minor and parked lines so it can triage which must be
 fixed before merge.
 
@@ -602,11 +604,29 @@ delete this plan's workspace (`rm -rf <workspace>`) — the git history is
 the record now. Sibling directories belong to other plans; leave them
 alone.
 
-Use superpowers:finishing-a-development-branch. Its first step runs the
-full test suite. Copy the final verification task's ledger line before you
-delete the workspace: if HEAD is still the commit that line names, that run
-is the step's evidence — cite it instead of running the suites again. If
-the final fix dispatch moved HEAD, run the step as written.
+## Finishing
+
+Copy the final verification task's ledger line before you delete the
+workspace: if HEAD is still the commit that line names, that green run is
+the evidence that the branch works; cite it. If the final fix dispatch
+moved HEAD, run the full suites once more (output capped with `| tail -40`)
+and cite that run. No evidence, no finish.
+
+Then ask your human partner how to finish, with the evidence beside the
+question, and do only what they choose:
+
+1. **Open a pull request** (the usual choice): push the branch and run
+   `gh pr create` (GitHub) or `glab mr create` (GitLab) with a summary of
+   the plan's goal, the tasks, and the verification evidence.
+2. **Merge locally** into the base branch (`git switch <base> && git merge
+   --no-ff <branch>`), then run the suites on the result.
+3. **Keep the branch** as it is, for later.
+4. **Discard the work**: list the commits that would be lost and wait for
+   an explicit, typed confirmation before deleting anything.
+
+Pushing, merging and discarding happen only on that answer. When the build
+ran in a worktree, remove it (`git worktree remove .worktrees/<branch>`)
+after a merge or a discard; keep it for options 1 and 3.
 
 ## Common Rationalizations
 
@@ -628,11 +648,11 @@ the final fix dispatch moved HEAD, run the step as written.
 ## Example Workflow
 
 ```
-You: I'm using Subagent-Driven Development to execute this plan.
+You: I'm using parallel-build to execute this plan.
 
 [Setup: worktree verified]
-[Read plan file once: docs/superpowers/plans/feature-plan.md]
-[Resolve workspace: bash scripts/sdd-workspace docs/superpowers/plans/feature-plan.md — no ledger inside, fresh start]
+[Read plan file once: docs/plans/feature-plan.md, the default plans folder]
+[Resolve workspace: bash scripts/sdd-workspace docs/plans/feature-plan.md (default folder) — no ledger inside, fresh start]
 [Create todos for all tasks]
 
 Task 1: Hook installation script
@@ -641,7 +661,7 @@ Task 1: Hook installation script
 
 Implementer: "Before I begin - should the hook be installed at user or system level?"
 
-You: "User level (~/.config/superpowers/hooks/)"
+You: "User level (~/.config/acme/hooks/)"
 
 Implementer: [Later]
   - Implemented install-hook command
@@ -696,6 +716,6 @@ Final reviewer: All requirements met. Deferred minors triaged: none block merge.
 
 [Delete this plan's workspace — the record now lives in git]
 
-Done! Using superpowers:finishing-a-development-branch — HEAD is still e1f2a3b,
-so Task 9's green run is its test evidence.
+Finishing: HEAD is still e1f2a3b, so Task 9's green run is the evidence.
+Asked: open a PR, merge locally, keep the branch, or discard?
 ```
