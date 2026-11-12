@@ -7,6 +7,7 @@ only when the job did not complete.
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -83,6 +84,34 @@ def summarise_events(log_path):
     return thread_id, usage, steps, largest_item_chars, error
 
 
+RUN_TAG = re.compile(r"^Run:\s*(\S+)(?:\s+Task:\s*(\S+))?(?:\s+Role:\s*(\S+))?", re.MULTILINE)
+
+
+def parse_run_tag(brief):
+    """The orchestrator run a brief belongs to, from its `Run: <dir>   Task: <id>   Role: <role>` line."""
+    match = RUN_TAG.search("\n".join(brief.splitlines()[:5]))
+    if not match:
+        return None
+    return {"run": match.group(1), "task": match.group(2), "role": match.group(3)}
+
+
+def record_path(run_dir, stamp, label):
+    return os.path.join(run_dir, "agents", f"codex-{stamp}-{label}.json")
+
+
+def write_record(path, record):
+    """Write the job's record for the run dashboard, replacing the earlier one atomically."""
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    temporary = f"{path}.{os.getpid()}.tmp"
+    with open(temporary, "w", encoding="utf-8") as handle:
+        json.dump(record, handle, indent=1)
+    os.replace(temporary, path)
+
+
+def now_iso():
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
 def read_text(path):
     if not os.path.exists(path):
         return ""
@@ -105,10 +134,22 @@ def main():
         print(json.dumps({"status": "failed", "error": "empty brief on stdin"}))
         return 2
 
-    run_dir = os.path.join(tempfile.gettempdir(), "codex-runs", f"{time.strftime('%Y%m%d-%H%M%S')}-{args.label}")
+    stamp = time.strftime("%Y%m%d-%H%M%S")
+    tag = parse_run_tag(brief)
+    orchestrator_run = tag["run"] if tag and os.path.isfile(os.path.join(tag["run"], "run.json")) else None
+    logs_root = os.path.join(orchestrator_run, "codex") if orchestrator_run else os.path.join(tempfile.gettempdir(), "codex-runs")
+    run_dir = os.path.join(logs_root, f"{stamp}-{args.label}")
     os.makedirs(run_dir, exist_ok=True)
     log_path = os.path.join(run_dir, "events.jsonl")
     last_message_path = os.path.join(run_dir, "last-message.txt")
+    record_file, record = None, None
+    if orchestrator_run:
+        record_file = record_path(orchestrator_run, stamp, args.label)
+        record = {"provider": "chatgpt", "model": args.model, "effort": args.effort, "task": tag["task"],
+                  "role": tag["role"], "label": args.label, "status": "running", "pid": os.getpid(),
+                  "started": now_iso(), "ended": None, "thread_id": args.resume, "resumed": bool(args.resume),
+                  "usage": None, "log": log_path}
+        write_record(record_file, record)
 
     with open(log_path, "w", encoding="utf-8") as log:
         process = subprocess.run(
@@ -137,6 +178,10 @@ def main():
     summary["last_message"] = read_text(last_message_path)
     if status != "completed":
         summary.update({"exit_code": process.returncode, "error": error, "log": log_path})
+    if record_file:
+        record.update(status=status, ended=now_iso(), thread_id=summary["thread_id"], usage=usage,
+                      steps=steps, last_message=summary["last_message"], error=error)
+        write_record(record_file, record)
     print(json.dumps(summary, indent=1))
     return 0
 

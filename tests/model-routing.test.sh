@@ -51,3 +51,33 @@ test_run_codex_job_rejects_empty_brief() {
   assert_contains "$out" '"status": "failed"' "empty brief status"
   assert_contains "$out" 'empty brief' "empty brief error"
 }
+
+test_briefs_carry_the_git_hygiene_rules() {
+  local body
+  body=$(cat "$SKILL_DIR/references/write-briefs.md")
+  assert_contains "$body" "Never \`sed -i\`" "sed -i forbidden"
+  assert_contains "$body" "Skip-worktree files you may touch" "skip-worktree files named"
+  assert_contains "$body" "files you created outside" "stray files reported"
+  assert_contains "$body" "git-check.py" "git steward uses the check"
+}
+
+test_skill_documents_the_run_marker_for_auto_save_hooks() {
+  assert_contains "$(cat "$SKILL_DIR/SKILL.md")" 'git rev-parse --git-path chief-run' "hook snippet"
+}
+
+test_git_check_reports_json_outside_a_orchestrator_run() {
+  local out
+  command -v python3 >/dev/null || return 0
+  git init -q -b main repo && (cd repo && git commit -q --allow-empty -m init)
+  out=$(cd repo && python3 -B "$SKILL_DIR/scripts/git-check.py" --base main)
+  assert_contains "$out" '"branch": "main"' "branch"
+  assert_contains "$out" '"warnings": []' "clean repo"
+}
+
+test_git_check_warnings_only_is_compact() {
+  local out
+  command -v python3 >/dev/null || return 0
+  git init -q -b main repo && (cd repo && git commit -q --allow-empty -m init)
+  out=$(cd repo && python3 -B "$SKILL_DIR/scripts/git-check.py" --base main --warnings-only)
+  assert_eq '{"branch": "main", "run_marker": false, "warnings": []}' "$out" "warnings-only output"
+}

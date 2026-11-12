@@ -1,6 +1,6 @@
 ---
-name: parallel-agent-development
-description: Use when executing implementation plans with independent tasks in the current session
+name: parallel-build
+description: Use when an approved plan from parallel-plans (tasks that declare the files they own) is ready to be built by implementer and reviewer agents, in parallel waves where files are disjoint, or when resuming such a build from its ledger or handoff.
 ---
 
 # Parallel Build
@@ -37,7 +37,7 @@ digraph when_to_use {
     "Have implementation plan?" [shape=diamond];
     "Tasks mostly independent?" [shape=diamond];
     "Partner chose inline, or no subagent tool?" [shape=diamond];
-    "parallel-agent-development" [shape=box];
+    "parallel-build" [shape=box];
     "executing-plans" [shape=box];
     "Manual execution or brainstorm first" [shape=box];
 
@@ -46,7 +46,7 @@ digraph when_to_use {
     "Tasks mostly independent?" -> "Partner chose inline, or no subagent tool?" [label="yes"];
     "Tasks mostly independent?" -> "Manual execution or brainstorm first" [label="no - tightly coupled"];
     "Partner chose inline, or no subagent tool?" -> "executing-plans" [label="yes"];
-    "Partner chose inline, or no subagent tool?" -> "parallel-agent-development" [label="no"];
+    "Partner chose inline, or no subagent tool?" -> "parallel-build" [label="no"];
 }
 ```
 
@@ -85,10 +85,10 @@ digraph process {
 
     "Setup: worktree, ledger check, read plan, pre-flight review" [shape=box];
     "More tasks remain?" [shape=diamond];
-    "Dispatch final code reviewer (./final-reviewer-prompt.md)" [shape=box];
+    "Dispatch final reviewer (./final-reviewer-prompt.md)" [shape=box];
     "Final findings? ONE fix dispatch, one scoped re-review, adjudicate residuals" [shape=box];
     "Final review clean: delete this plan's workspace" [shape=box];
-    "Use the branch-finishing step" [shape=box style=filled fillcolor=lightgreen];
+    "Finish the branch (see Finishing)" [shape=box style=filled fillcolor=lightgreen];
 
     "Setup: worktree, ledger check, read plan, pre-flight review" -> "Dispatch implementer subagent (./implementer-prompt.md)";
     "Dispatch implementer subagent (./implementer-prompt.md)" -> "Implementer asks questions?";
@@ -114,19 +114,21 @@ digraph process {
     "Park findings in ledger with rulings" -> "Append completion to ledger, mark todo complete";
     "Append completion to ledger, mark todo complete" -> "More tasks remain?";
     "More tasks remain?" -> "Dispatch implementer subagent (./implementer-prompt.md)" [label="yes"];
-    "More tasks remain?" -> "Dispatch final code reviewer (./final-reviewer-prompt.md)" [label="no"];
-    "Dispatch final code reviewer (./final-reviewer-prompt.md)" -> "Final findings? ONE fix dispatch, one scoped re-review, adjudicate residuals";
+    "More tasks remain?" -> "Dispatch final reviewer (./final-reviewer-prompt.md)" [label="no"];
+    "Dispatch final reviewer (./final-reviewer-prompt.md)" -> "Final findings? ONE fix dispatch, one scoped re-review, adjudicate residuals";
     "Final findings? ONE fix dispatch, one scoped re-review, adjudicate residuals" -> "Final review clean: delete this plan's workspace";
-    "Final review clean: delete this plan's workspace" -> "Use the branch-finishing step";
+    "Final review clean: delete this plan's workspace" -> "Finish the branch (see Finishing)";
 }
 ```
 
 ## Setup
 
-Ensure the work happens in an isolated workspace: use
-a git worktree setup to create one or verify the existing one.
-Never start implementation on a main/master branch without your human
-partner's explicit consent.
+Work on a feature branch; never start implementation on a main/master
+branch without your human partner's explicit consent. When the build should
+be isolated from their checkout, follow [worktree.md](./worktree.md): it
+checks for an existing worktree, uses the harness's own worktree tool before
+git, verifies the folder is ignored, prepares the project and takes a
+baseline.
 
 Conversation memory does not survive compaction. In real sessions,
 controllers that lost their place have re-dispatched entire completed task
@@ -142,8 +144,7 @@ a ledger file, not only in todos.
   line names your plan file, tasks with a `Task <N>: complete` line are DONE
   — do not re-dispatch them; resume at the first task without one. A task
   whose last line is a fix round is mid-loop: resume the loop at the next
-  round. A ledger whose first line names a different plan file — or a stray
-  ledger at the old flat path `.parallel-build/progress.md` — is another
+  round. A ledger whose first line names a different plan file is another
   plan's progress: leave it in place and start your own, fresh.
 - Create the ledger with its identity as the first line:
   `# Build ledger — plan: <plan file path>`.
@@ -351,7 +352,7 @@ If a task fails the test, it starts the next wave. Waves are at most four
 tasks. When the file lists are unclear, dispatch serially — an unverifiable
 "different files" is not disjoint.
 
-**Auto-commit hooks.** If the repo has a Stop hook that commits with `git add -A` (check `.claude/settings.json`, `.claude/settings.local.json` and the user settings), do not end your turn while a wave is running: wait for the wave inside the turn. A checkpoint commit made mid-wave mixes tasks' half-finished files, and `ownership-check` rejects it.
+**Auto-commit hooks.** If the repo has a Stop hook that commits with `git add -A` (check `.claude/settings.json`, `.claude/settings.local.json` and the user settings), do not end your turn while a wave is running: wait for the wave inside the turn. A checkpoint commit made mid-wave mixes tasks' half-finished files, and `ownership-check` rejects it. Under a orchestrator, every dispatch's first line is the run tag (`Run: <run folder>   Task: <n>   Role: <role>`, see model-routing's `write-briefs.md`), so the run dashboard and cost report see it. `git-check.py --start-run` (model-routing) marks the run, and a hook whose first line tests `$(git rev-parse --git-path chief-run)` skips it.
 
 Dispatching a wave:
 
@@ -567,8 +568,7 @@ branch started from, e.g. `git merge-base main HEAD`) and include the
 printed path in the final review dispatch, so the final reviewer reads
 one file instead of re-deriving the branch diff with git commands. Dispatch
 on the most capable available model (see Model Selection), using
-the final code reviewer's
-[code-reviewer.md](./final-reviewer-prompt.md). Point it at
+[final-reviewer-prompt.md](./final-reviewer-prompt.md). Point it at
 the ledger's deferred-minor and parked lines so it can triage which must be
 fixed before merge.
 
@@ -602,11 +602,14 @@ delete this plan's workspace (`rm -rf <workspace>`) — the git history is
 the record now. Sibling directories belong to other plans; leave them
 alone.
 
-Use the branch-finishing step. Its first step runs the
-full test suite. Copy the final verification task's ledger line before you
-delete the workspace: if HEAD is still the commit that line names, that run
-is the step's evidence — cite it instead of running the suites again. If
-the final fix dispatch moved HEAD, run the step as written.
+## Finishing
+
+Copy the final verification task's ledger line before you delete the
+workspace: if HEAD is still the commit that line names, that green run is
+the evidence the branch works. Then follow [finishing.md](./finishing.md):
+confirm the base, offer exactly its menu (pull request, local merge, or
+keep), do only what your human partner picks, and clean up only what this
+skill created.
 
 ## Common Rationalizations
 
@@ -628,11 +631,11 @@ the final fix dispatch moved HEAD, run the step as written.
 ## Example Workflow
 
 ```
-You: I'm using Parallel Build to execute this plan.
+You: I'm using parallel-build to execute this plan.
 
 [Setup: worktree verified]
-[Read plan file once: docs/plans/feature-plan.md]
-[Resolve workspace: bash scripts/plan-workspace docs/plans/feature-plan.md — no ledger inside, fresh start]
+[Read plan file once: docs/plans/feature-plan.md, the default plans folder]
+[Resolve workspace: bash scripts/plan-workspace docs/plans/feature-plan.md (default folder) — no ledger inside, fresh start]
 [Create todos for all tasks]
 
 Task 1: Hook installation script
@@ -696,6 +699,6 @@ Final reviewer: All requirements met. Deferred minors triaged: none block merge.
 
 [Delete this plan's workspace — the record now lives in git]
 
-Done! Using the branch-finishing step — HEAD is still e1f2a3b,
-so Task 9's green run is its test evidence.
+Finishing: HEAD is still e1f2a3b, so Task 9's green run is the evidence.
+Asked: open a PR, merge locally, keep the branch, or discard?
 ```

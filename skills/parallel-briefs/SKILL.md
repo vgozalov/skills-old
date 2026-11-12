@@ -69,4 +69,4 @@ Tell every agent to stage and commit by explicit path only, since siblings have 
 
 ## Relation to plans
 
-Inside an implementation plan, use parallel-plans' ownership blocks and parallel-agent-development's waves instead. This skill is for work outside a plan.
+Inside an implementation plan, use parallel-plans' ownership blocks and parallel-build's waves instead. This skill is for work outside a plan.

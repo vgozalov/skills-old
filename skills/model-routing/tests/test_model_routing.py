@@ -20,27 +20,27 @@ codex_job = load_script("run-codex-job")
 
 
 class PickProviderTest(unittest.TestCase):
-    def pick(self, conductor, **readings):
-        return usage.pick_provider(readings, conductor)[0]
+    def pick(self, orchestrator, **readings):
+        return usage.pick_provider(readings, orchestrator)[0]
 
-    def test_conductor_provider_is_preferred_below_the_switch_point(self):
+    def test_orchestrator_provider_is_preferred_below_the_switch_point(self):
         self.assertEqual(self.pick("claude", claude={"5h": 43, "week": 58}, chatgpt={"5h": 0, "week": 64}), "claude")
 
-    def test_work_moves_off_the_conductor_provider_at_60_percent_of_its_5h_window(self):
+    def test_work_moves_off_the_orchestrator_provider_at_60_percent_of_its_5h_window(self):
         self.assertEqual(self.pick("claude", claude={"5h": 72, "week": 62}, chatgpt={"5h": 0, "week": 64}), "chatgpt")
         self.assertEqual(self.pick("claude", claude={"5h": 60, "week": 10}, chatgpt={"5h": 0, "week": 10}), "chatgpt")
 
-    def test_a_chatgpt_conductor_moves_work_to_claude_at_60_percent(self):
+    def test_a_chatgpt_orchestrator_moves_work_to_claude_at_60_percent(self):
         self.assertEqual(self.pick("chatgpt", claude={"5h": 20, "week": 30}, chatgpt={"5h": 65, "week": 40}), "claude")
         self.assertEqual(self.pick("chatgpt", claude={"5h": 20, "week": 30}, chatgpt={"5h": 59, "week": 40}), "chatgpt")
 
-    def test_when_both_are_past_60_the_conductor_reserve_is_kept(self):
+    def test_when_both_are_past_60_the_orchestrator_reserve_is_kept(self):
         self.assertEqual(self.pick("claude", claude={"5h": 70, "week": 50}, chatgpt={"5h": 75, "week": 50}), "chatgpt")
 
     def test_a_provider_near_its_weekly_limit_is_skipped_while_another_has_room(self):
         self.assertEqual(self.pick("claude", claude={"5h": 7, "week": 99}, chatgpt={"5h": 21, "week": 34}), "chatgpt")
 
-    def test_the_conductor_takes_the_work_when_no_other_provider_has_room(self):
+    def test_the_orchestrator_takes_the_work_when_no_other_provider_has_room(self):
         self.assertEqual(self.pick("claude", claude={"5h": 70, "week": 50}, chatgpt={"5h": 95, "week": 50}), "claude")
         self.assertEqual(self.pick("claude", claude={"5h": 70, "week": 50}, chatgpt={"error": "no answer"}), "claude")
 
@@ -48,13 +48,13 @@ class PickProviderTest(unittest.TestCase):
         blocked = {"5h": 5, "week": 10, "blocked": True}
         self.assertEqual(self.pick("claude", claude={"5h": 70, "week": 50}, chatgpt=blocked), "claude")
 
-    def test_unreadable_conductor_usage_means_ask(self):
+    def test_unreadable_orchestrator_usage_means_ask(self):
         self.assertEqual(self.pick("claude", claude={"error": "x"}, chatgpt={"5h": 0, "week": 10}), "ask")
 
     def test_every_provider_near_its_limit_means_ask(self):
         self.assertEqual(self.pick("claude", claude={"5h": 95, "week": 50}, chatgpt={"5h": 92, "week": 50}), "ask")
 
-    def test_a_conductor_without_a_usage_reader_balances_on_the_lower_5h_window(self):
+    def test_a_orchestrator_without_a_usage_reader_balances_on_the_lower_5h_window(self):
         self.assertEqual(self.pick("gemini", claude={"5h": 40, "week": 50}, chatgpt={"5h": 10, "week": 60}), "chatgpt")
 
     def test_the_reason_names_the_numbers_behind_the_pick(self):
@@ -64,12 +64,12 @@ class PickProviderTest(unittest.TestCase):
         self.assertIn("60%", why)
 
 
-class DetectConductorTest(unittest.TestCase):
+class DetectOrchestratorTest(unittest.TestCase):
     def test_claude_code_is_detected(self):
-        self.assertEqual(usage.detect_conductor({"CLAUDECODE": "1"}), "claude")
+        self.assertEqual(usage.detect_orchestrator({"CLAUDECODE": "1"}), "claude")
 
     def test_an_unknown_environment_gives_none(self):
-        self.assertIsNone(usage.detect_conductor({}))
+        self.assertIsNone(usage.detect_orchestrator({}))
 
 
 class ReadUsageCacheTest(unittest.TestCase):

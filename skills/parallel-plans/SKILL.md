@@ -1,9 +1,9 @@
 ---
 name: parallel-plans
-description: Use when you have a spec or requirements for a multi-step task, before touching code
+description: Use when turning a spec, a chief run's task or agreed requirements into an implementation plan whose tasks declare the files they own, so agents can build them in parallel with parallel-build; before touching code on a multi-step change.
 ---
 
-# Writing Plans
+# Parallel Plans
 
 ## Overview
 
@@ -11,9 +11,9 @@ Write implementation plans for an engineer who has not seen this codebase or thi
 
 **Announce at start:** "I'm using the parallel-plans skill to create the implementation plan."
 
-**Context:** If working in an isolated worktree, it should have been created at execution time.
+**Context:** If the build will run in an isolated worktree, parallel-build's Setup creates it at execution time; the plan does not.
 
-**Save plans to:** `docs/plans/YYYY-MM-DD-<feature-name>.md`
+**Save plans to:** `docs/plans/YYYY-MM-DD-<feature-name>.md` (default)
 - (User preferences for plan location override this default)
 
 ## Scope Check
@@ -56,7 +56,7 @@ independently testable deliverable.
 ```markdown
 # [Feature Name] Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use parallel-agent-development (recommended) or inline execution to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use parallel-build to implement this plan task-by-task (or the plan's Inline execution, below). Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** [One sentence describing what this builds]
 
@@ -179,7 +179,7 @@ the same registry, barrel, or lockfile and the wave collides.
   like any wave task.
 
 Executors verify a wave with `ownership-check` (in the
-`parallel-agent-development` skill), which parses exactly this format: a task
+`parallel-build` skill), which parses exactly this format: a task
 starts at a `### Task <N>:` heading, its Owns are the backticked tokens on its
 `**Owns:**` line, and the frozen globs are the backticked tokens on the
 `Frozen during waves:` line. Keep each of those on a single line.
@@ -304,19 +304,21 @@ them to review the plan and choose an execution method before implementation.
 
 **When no execution method has already been supplied:**
 
-**"Plan complete and saved to `docs/plans/<filename>.md`. Please review the plan. Which execution approach would you prefer?**
+**"Plan complete and saved to `<plans folder>/<filename>.md`. Please review the plan. Which execution approach would you prefer?**
 
 - **Parallel build** - A fresh subagent implements each task and a fresh reviewer checks it before the next one starts, then a whole-branch review at the end. Most thorough; costs a fresh context per task and per review.
-- **Native** - I implement every task myself in this session, the way this harness runs work, then one fresh reviewer on the most capable model checks the whole branch. Cheapest and fastest; no independent review until the end. Runs well with a mid-tier session model, since the plan carries the design.
+- **Inline** - I implement every task myself in this session, the way this harness runs work, then one fresh reviewer on the most capable model checks the whole branch. Cheapest and fastest; no independent review until the end. Runs well with a mid-tier session model, since the plan carries the design.
 
 **For this plan I recommend <one of the two>, because <one sentence from the plan: how much the tasks depend on each other's interfaces, how many there are, what a shipped mistake would cost>. Does the plan capture what you want, and which approach should we use?"**
 
 **When an execution method has already been supplied:**
 
-**"Plan complete and saved to `docs/plans/<filename>.md`. Please review the plan. Does it capture what you want?"**
+**"Plan complete and saved to `<plans folder>/<filename>.md`. Please review the plan. Does it capture what you want?"**
 
 **If Parallel build chosen:**
-- **REQUIRED SUB-SKILL:** Use parallel-agent-development
+- **REQUIRED SUB-SKILL:** Use parallel-build
 
-**If Native chosen:**
-- **REQUIRED SUB-SKILL:** Use inline execution
+**If Inline chosen:**
+- Work through the tasks in order yourself, on a feature branch. For each task: write its test first when the plan says so, implement, run the task's own verification command, tick its checkboxes, and commit by explicit path.
+- Stop and ask when a task needs a design choice the plan does not settle; do not guess.
+- After the last task, dispatch one fresh reviewer on the most capable model with parallel-build's `final-reviewer-prompt.md`, fix what it finds, then follow parallel-build's Finishing section.

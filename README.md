@@ -1,6 +1,6 @@
 <div align="center">
 
-<img alt="skills for Claude Code and Codex. A conductor robot leads an orchestra of brass clockwork robots, each reading from its own music stand under its own lamp: every agent owns its part." src="./assets/banner.svg" width="100%">
+<img alt="skills for Claude Code and Codex. A orchestrator robot leads an orchestra of brass clockwork robots, each reading from its own music stand under its own lamp: every agent owns its part." src="./assets/banner.svg" width="100%">
 
 <br>
 
@@ -28,7 +28,9 @@ Every skill here is a plain `SKILL.md` folder with a name of its own, so it inst
 
 ## Install
 
-Pick the one that fits. None of them need a clone.
+**Let your agent do it.** Tell Claude Code or Codex: *"Install the skills from https://github.com/vgozalov/skills following its INSTALL.md."* [INSTALL.md](./INSTALL.md) walks the agent through the skills, the `chief` agent, the usage hook, auto-save hooks, the `AGENTS.md` block and a final check, asking you only what it must.
+
+Or by hand; none of these need a clone.
 
 ### Just these skills
 
@@ -36,7 +38,7 @@ Pick the one that fits. None of them need a clone.
 npx skills@latest add vgozalov/skills -a claude-code -a codex
 ```
 
-Swap in any agent the `skills` CLI supports (`cursor`, `opencode`, `windsurf`, `amp`, and more), or omit `-a` to choose interactively. `wrap-up`, `create-sprint` and `parallel-briefs` work on their own. `parallel-plans` and `parallel-agent-development` work as a pair, and they also load skills by name for git worktrees, code review and finishing a branch, so have skills with those jobs installed too.
+Swap in any agent the `skills` CLI supports (`cursor`, `opencode`, `windsurf`, `amp`, and more), or omit `-a` to choose interactively. `wrap-up`, `create-sprint` and `parallel-briefs` work on their own. `parallel-plans` and `parallel-build` work as a pair and need nothing else: worktree setup, the final review and finishing the branch are built in. `chief` uses all of them plus `model-routing`.
 
 ### A whole repo from a manifest
 
@@ -122,38 +124,49 @@ curl -fsSL https://raw.githubusercontent.com/vgozalov/skills/main/install.sh | b
 | Skill                                                                                                                                                          | What it does                                                                                                                                                                                         |
 | :------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | <img src="./assets/marker-parallel-plans.svg" width="44" alt=""><br>[**parallel-plans**](./skills/parallel-plans/SKILL.md)                                     | Turns a spec into a task-by-task plan. Each task declares the files it **owns**, and the plan lists the files frozen while tasks run in parallel.                                                    |
-| <img src="./assets/marker-parallel-agent-development.svg" width="44" alt=""><br>[**parallel-agent-development**](./skills/parallel-agent-development/SKILL.md) | Runs a plan through implementer and reviewer subagents. Tasks that touch different files run **in parallel waves** in one worktree, and `ownership-check` rejects any commit outside a task's files. |
+| <img src="./assets/marker-parallel-build.svg" width="44" alt=""><br>[**parallel-build**](./skills/parallel-build/SKILL.md) | Runs a plan through implementer and reviewer subagents. Tasks that touch different files run **in parallel waves** in one worktree, and `ownership-check` rejects any commit outside a task's files. |
 | <img src="./assets/marker-parallel-briefs.svg" width="44" alt=""><br>[**parallel-briefs**](./skills/parallel-briefs/SKILL.md)                                  | Splits work across several agents outside a plan. Each gets a brief: your files, do not touch, read first, and what to do when shared code is missing.                                               |
 | <img src="./assets/marker-wrap-up.svg" width="44" alt=""><br>[**wrap-up**](./skills/wrap-up/SKILL.md)                                                          | Ends a session: feedback, learnings, the day's memory file, a one-line "Last Session" pointer, and the docs commit.                                                                                  |
 | <img src="./assets/marker-create-sprint.svg" width="44" alt=""><br>[**create-sprint**](./skills/create-sprint/SKILL.md)                                        | Turns a written plan into a verification sprint, a `prod.json` acceptance harness, from its bundled example.                                                                                         |
-| [**model-routing**](./skills/model-routing/SKILL.md) | Picks the model for each delegated job across Claude and ChatGPT (Codex): the cheapest tier that can do it, never above the conductor's own model. Jobs stay on the conductor's own provider until it has used 60% of its 5-hour window, then move to the other, so the conductor never runs dry mid-session. Ships usage, Codex-launch and pre-spawn hook scripts. |
+| [**chief**](./skills/chief/SKILL.md) | The orchestrator pipeline, as `/chief <task>` in any session or loaded by the `chief` agent. A task can come from chat, a file or an issue; each run gets a folder, a live dashboard of every Claude and Codex agent on it, and a cost summary per provider. |
+| [**model-routing**](./skills/model-routing/SKILL.md) | Picks the model for each delegated job across Claude and ChatGPT (Codex): the cheapest tier that can do it, never above the orchestrator's own model. Jobs stay on the orchestrator's own provider until it has used 60% of its 5-hour window, then move to the other, so the orchestrator never runs dry mid-session. Ships usage, Codex-launch and pre-spawn hook scripts. |
 
-## The conductor agent
+## The chief agent
 
-[`agents/conductor.md`](./agents/conductor.md) is a Claude Code agent that delivers a feature through subagents and Codex jobs and never codes itself: research, plan, plan review, your approval, parallel build, whole-branch review, report with token costs. It routes every job with `model-routing`, plans with `parallel-plans`, and builds with `parallel-briefs` or `parallel-agent-development`, so install those skills first.
+[`agents/chief.md`](./agents/chief.md) is a Claude Code agent that delivers a feature through subagents and Codex jobs and never codes itself: research, plan, plan review, your approval, parallel build, whole-branch review, report with token costs. Its pipeline lives in the `chief` skill; it routes every job with `model-routing`, plans with `parallel-plans`, and builds with `parallel-briefs` or `parallel-build`, so install those skills first.
 
 The `skills` CLI installs skills, not agents, so copy the agent yourself:
 
 ```bash
-mkdir -p ~/.claude/agents && cp agents/conductor.md ~/.claude/agents/   # every project
-# or: mkdir -p .claude/agents && cp agents/conductor.md .claude/agents/ # one project
-claude --agent conductor        # or ask any session to "act as my conductor"
+mkdir -p ~/.claude/agents && cp agents/chief.md ~/.claude/agents/   # every project
+# or: mkdir -p .claude/agents && cp agents/chief.md .claude/agents/ # one project
+claude --agent chief        # tool limits enforced by the agent file
+# or, in any session: /chief <the task, a file path, or an issue number>
 ```
 
-It defaults to Opus; started on Sonnet it runs as a Sonnet conductor with a lower ceiling.
+It defaults to Opus; started on Sonnet it runs as a Sonnet chief with a lower ceiling. No issue tracker is needed: the task you describe, or a client's or manager's request in a file, is saved verbatim as the run's `task.md` under `.chief/runs/<id>/`, which git ignores.
+
+### The run dashboard
+
+```bash
+python3 .claude/skills/chief/scripts/chief-run.py serve   # http://127.0.0.1:8765
+```
+
+One card per run, in columns by phase, with a chip for every agent: Claude subagents and Codex jobs alike, found through the run tag that starts each brief. Each card shows a Claude subtotal, a ChatGPT subtotal and their sum as an API-equivalent estimate; the header shows both accounts' 5-hour and weekly use with the 60% switch line, plus any git-check warnings. Click a card for the agent table, each agent's reply, and the run's task, plan, progress and handoff. `chief-run.py summary <run id>` prints the same numbers for the final report. Prices are in `skills/model-routing/prices.json`; Rates come from the official Anthropic and OpenAI pricing pages (2026-11-12); update the file when they change.
 
 <details>
 <summary><b>What model-routing needs on the machine</b></summary>
 <br>
 
 - `python3` for the scripts in `skills/model-routing/scripts/`.
-- Recommended for Claude Code: register `usage-before-spawn.py` as a PreToolUse hook (the settings snippet is at the top of the script). Before every agent spawn and Codex job it adds both accounts' usage and the routing pick to the conductor's context. It never blocks a spawn.
+- Recommended for Claude Code: run `python3 .claude/skills/model-routing/scripts/configure-hooks.py` (add `--global` for every project) to register `usage-before-spawn.py` as a PreToolUse hook; it is idempotent and keeps your other settings. Before every agent spawn and Codex job it adds both accounts' usage and the routing pick to the orchestrator's context. It never blocks a spawn.
+- The chief reads git state from `git-check.py`: auto-commit Stop hooks, skip-worktree files that differ from HEAD (their changes never reach a commit), stray `*-E`/`*.orig`/`*.bak` files, and auto-save commits. To keep a project's auto-save Stop hook out of orchestrator runs, make its first line `[ -e "$(git rev-parse --git-path chief-run)" ] && exit 0`.
 - Codex jobs run outside Codex's sandbox by default (`--sandbox danger-full-access`), so they can run tests, reach the network and use local containers like a Claude agent. Pass `--sandbox workspace-write` to fence one.
 - The `claude` CLI, logged in with a Claude subscription: Claude usage is read from `claude -p "/usage"`, a local command that spends no tokens.
 - For ChatGPT workers, the Codex CLI (`codex`) logged in with ChatGPT. Usage is read from its local app-server, and jobs run through `codex exec`. Without Codex the skill still routes everything to Claude.
 - Keep project rules in `AGENTS.md` with `CLAUDE.md` symlinked to it, so Claude and Codex workers load the same rules without them being pasted into every brief.
 - Codex jobs are saved sessions; list them with `codex resume --all --include-non-interactive`.
-- Optional: `"idleCompaction": false` in `~/.claude/settings.json` stops Claude Code compacting a long conductor session while it waits on workers.
+- Optional: `"idleCompaction": false` in `~/.claude/settings.json` stops Claude Code compacting a long chief session while it waits on workers.
 
 </details>
 
@@ -161,7 +174,7 @@ It defaults to Opus; started on Sonnet it runs as a Sonnet conductor with a lowe
 
 Running several implementer agents at once is the obvious speed-up. It's also how you get two agents editing the same registry, or one agent's `git add -A` sweeping up another's half-written files.
 
-`parallel-plans` makes every task declare what it owns. `parallel-agent-development` dispatches up to four tasks at once when their files don't overlap, then checks every commit before the next wave starts.
+`parallel-plans` makes every task declare what it owns. `parallel-build` dispatches up to four tasks at once when their files don't overlap, then checks every commit before the next wave starts.
 
 <p align="center">
 <img alt="A plan flows into Wave 0, the shared kit, then fans out to tasks 2 to 5 running in parallel. All four pass through ownership-check: clean commits go to the integration task and on to main; a violation resumes that implementer." src="./assets/parallel-waves.svg" width="100%">
@@ -259,7 +272,7 @@ For one or two sources, plain `npx` is all you need. The script earns its place 
 <summary><b>Does it work with Cursor, OpenCode or other agents?</b></summary>
 <br>
 
-The skills are plain `SKILL.md` folders, so any agent the `skills` CLI supports can install them with `-a <agent>`. They're written and tested against Claude Code and Codex. `parallel-agent-development` needs an agent that can dispatch subagents.
+The skills are plain `SKILL.md` folders, so any agent the `skills` CLI supports can install them with `-a <agent>`. They're written and tested against Claude Code and Codex. `parallel-build` needs an agent that can dispatch subagents.
 
 </details>
 
@@ -281,4 +294,4 @@ pip install fonttools && python3 assets/generate.py
 
 MIT. See [`LICENSE`](./LICENSE).
 
-Third-party notices are in [`LICENSES/`](./LICENSES), and a copy ships inside each skill that includes one, so it travels with every install. Skills installed from other sources keep their own licenses and are never committed here. Anthropic's `docx`, `pdf`, `xlsx` and `pptx` are only ever installed from their source. The art uses Instrument Serif, Instrument Sans and IBM Plex Mono (SIL Open Font License 1.1); only their outlines appear in the SVGs.
+Parts of `parallel-plans` and `parallel-build` began as MIT-licensed work; its notice is in [`LICENSES/third-party-MIT.txt`](./LICENSES/third-party-MIT.txt). Skills installed from other sources keep their own licenses and are never committed here. Anthropic's `docx`, `pdf`, `xlsx` and `pptx` are only ever installed from their source. The art uses Instrument Serif, Instrument Sans and IBM Plex Mono (SIL Open Font License 1.1); only their outlines appear in the SVGs.

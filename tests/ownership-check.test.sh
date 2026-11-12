@@ -1,7 +1,7 @@
 # shellcheck shell=bash
 # Behaviour of scripts/ownership-check: wave commits must stay inside their task's Owns.
 
-OC="$REPO_ROOT/skills/parallel-agent-development/scripts/ownership-check"
+OC="$REPO_ROOT/skills/parallel-build/scripts/ownership-check"
 
 make_wave_repo() {
   git init -q .
