@@ -4,23 +4,21 @@
 
 ```bash
 python3 <skill folder>/scripts/run-codex-job.py \
-  --model gpt-6-luna --effort medium --sandbox workspace-write --label task-2 <<'BRIEF'
+  --model gpt-6-luna --effort medium --label task-2 <<'BRIEF'
 <the brief>
 BRIEF
 ```
 
 When notified, `cat` the background output file.
 
-| Role                                     | `--sandbox`       | `--effort`                                           |
-| ---------------------------------------- | ----------------- | ---------------------------------------------------- |
-| Implementer, fixer                       | `workspace-write` | `medium`                                             |
-| Plan writer (saves the plan file)        | `workspace-write` | `high`                                               |
-| Plan reviewer, whole-branch reviewer     | `read-only`       | `high`; Astra `medium` (SKILL.md, tier 3 on ChatGPT) |
-| Researcher, per-task reviewer, fix check | `read-only`       | `medium`                                             |
+Jobs run outside the sandbox (`--sandbox danger-full-access`, the default), so a Codex worker can do what a Claude agent does: run the test suite, reach the network and local containers, and work in a git worktree (add `--cd <worktree>`). Pass `--sandbox workspace-write` or `read-only` only to fence a job on purpose. A fenced job in a worktree cannot commit, because the worktree's git metadata lives in the main checkout's `.git/worktrees/`, outside the writable root, and cannot run tests that write under a linked `node_modules`; commit its edits yourself by explicit path after checking `git status`.
+
+| Role                                                         | `--effort`                                           |
+| ------------------------------------------------------------ | ---------------------------------------------------- |
+| Implementer, fixer, researcher, per-task reviewer, fix check | `medium`                                             |
+| Plan writer, plan reviewer, whole-branch reviewer            | `high`; Astra `medium` (SKILL.md, tier 3 on ChatGPT) |
 
 Tier 3 runs Astra at `medium` whatever the role says; its fallback is Sol at `high`.
-
-**Committing from a git worktree:** a worktree's git metadata lives in the main checkout's `.git/worktrees/`, outside the `workspace-write` sandbox, so Codex cannot create `index.lock` there and its commit fails; the edits stay in the working tree. Commit them yourself by explicit path after checking `git status`, or run Codex jobs that must commit from the main checkout.
 
 Always pass `--effort`, so the role decides the effort rather than whatever `model_reasoning_effort` the Codex config sets.
 
@@ -32,8 +30,8 @@ Always pass `--effort`, so the role decides the effort rather than whatever `mod
 - `rate_limited`: relaunch at the same tier on Claude.
 - `failed`: an unsupported slug, sandbox or auth error is an environment problem, not a reason to change tier. If `error` does not explain it, a tier-1 agent reads `log`; you do not.
 
-**The script also** disables Codex's own sub-agents (so the ceiling holds) and uses the repo as the working root. Both sandboxes have no network: a job that needs `npm install` or web docs goes to a Claude agent.
+**The script also** disables Codex's own sub-agents (so the ceiling holds) and uses the repo, or `--cd`, as the working root.
 
-**Briefs:** Codex loads the repo's `AGENTS.md` automatically, so do not paste project rules that live there; add "Do not commit, push or create branches." Codex cannot message you mid-job; `last_message` is its whole answer.
+**Briefs:** Codex loads the repo's `AGENTS.md` automatically, so do not paste project rules that live there; add "Do not commit, push or create branches" unless that is the job. Codex cannot message you mid-job; `last_message` is its whole answer.
 
 **Seeing the jobs:** they are saved Codex sessions. In a terminal, `codex resume --all --include-non-interactive` lists them (non-interactive `exec` sessions are hidden by default) and opens one to read or continue.

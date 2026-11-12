@@ -37,6 +37,13 @@ test_scripts_parse() {
   done
 }
 
+test_script_unit_tests_pass() {
+  local out
+  command -v python3 >/dev/null || return 0
+  out=$(python3 -B -m unittest discover -s "$SKILL_DIR/tests" 2>&1) || fail "model-routing unit tests failed:
+$out"
+}
+
 test_run_codex_job_rejects_empty_brief() {
   local out
   command -v python3 >/dev/null || return 0

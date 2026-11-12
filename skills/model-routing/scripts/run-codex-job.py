@@ -13,7 +13,7 @@ import tempfile
 import time
 
 EFFORTS = ["low", "medium", "high", "xhigh", "max", "ultra"]
-SANDBOXES = ["read-only", "workspace-write"]
+SANDBOXES = ["danger-full-access", "workspace-write", "read-only"]
 USAGE_KEYS = {
     "input_tokens": "input",
     "cached_input_tokens": "cached",
@@ -23,15 +23,20 @@ USAGE_KEYS = {
 USAGE_LIMIT_MARKERS = ["usage limit", "rate limit", "rate_limit"]
 
 
-def parse_args():
+def parse_args(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--model", required=True, help="Codex model slug, e.g. gpt-6-luna")
     parser.add_argument("--effort", default="medium", choices=EFFORTS)
-    parser.add_argument("--sandbox", default="read-only", choices=SANDBOXES)
+    parser.add_argument(
+        "--sandbox",
+        default="danger-full-access",
+        choices=SANDBOXES,
+        help="danger-full-access (default) runs commands like a Claude agent: network, tests, local containers",
+    )
     parser.add_argument("--cd", default=os.getcwd(), help="working root for the job")
     parser.add_argument("--resume", metavar="THREAD_ID", help="continue an earlier job's thread")
     parser.add_argument("--label", default="job", help="short name used in the log folder")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def build_command(args, last_message_path):
