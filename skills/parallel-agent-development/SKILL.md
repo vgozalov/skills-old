@@ -136,7 +136,7 @@ a ledger file, not only in todos.
 - Each plan owns a workspace: at skill start, run this skill's
   `bash scripts/plan-workspace PLAN_FILE` — it prints the plan's git-ignored
   directory (under `<repo-root>/.parallel-build/`), home to
-  every artifact for THIS plan: ledger, briefs, reports, review packages.
+  every artifact for THIS plan: ledger, handoff, briefs, reports, review packages.
   Another plan's directory is never yours to read or write.
 - Check for this plan's ledger at `<workspace>/progress.md`. If its first
   line names your plan file, tasks with a `Task <N>: complete` line are DONE
@@ -147,6 +147,11 @@ a ledger file, not only in todos.
   plan's progress: leave it in place and start your own, fresh.
 - Create the ledger with its identity as the first line:
   `# Build ledger — plan: <plan file path>`.
+- **One ledger and one handoff per plan, never more.** The ledger is
+  `<workspace>/progress.md` (appended as tasks move); the handoff is
+  `<workspace>/handoff.md` and is **overwritten** each time a session pauses,
+  never dated or copied. Delete stale ledgers or handoffs you find for the
+  same plan instead of starting a second one.
 - The ledger is your recovery map: the commits it names exist in git even
   when your context no longer remembers creating them. After compaction,
   trust the ledger and `git log` over your own recollection.
@@ -530,6 +535,29 @@ message as your other bookkeeping:
 Then mark the todo complete and move on. Never move to the next task (or, for a wave, the next wave) while
 the review has open Critical/Important issues that are neither fixed nor
 parked-with-ruling at the cap.
+
+## Pausing and resuming
+
+Sessions stop before plans do: a usage window runs out, context grows past
+what is cheap to carry, or the user ends the day. Plan for it.
+
+- **When to pause:** before dispatching new work when the routing usage check
+  returns `ask` because every account is near its limit, or when your own
+  context is large enough that a fresh session would be cheaper. Let in-flight
+  jobs finish, ledger their results, then pause; do not start a task you cannot
+  see through review.
+- **Write the handoff** to `<workspace>/handoff.md`, replacing any previous
+  one: branch and base commit, tasks done, tasks in flight with the exact next
+  step (e.g. "scoped re-review of a1b2c3d..d4e5f6a, top tier"), facts later
+  tasks need that only the ledger or spikes hold, routing in use, and the
+  owner rules in force. Keep it short; it points at the ledger, it does not
+  copy it.
+- **Give the user a resume prompt** in your reply, ready to paste into a new
+  session: read `handoff.md`, then `progress.md`, then `git log --oneline
+  <base>..HEAD` and `git status --short`; load this skill and the routing
+  skill; resume at the handoff's next step; do not re-do finished work; read
+  no whole large files. The new session overwrites `handoff.md` when it
+  pauses in turn.
 
 ## Final Review
 
