@@ -33,3 +33,9 @@ Run in order; skip a phase only when the user says so. Keep a ledger: worker, pr
 - Never let a worker review its own output. Never exceed your ceiling.
 - Do not commit, push, merge or force unless the user asks. Report hook auto-commits and let the user decide. Stop and ask before anything irreversible, security-sensitive, or outside the working branch.
 - One short line between spawns. Report plainly: a check not run is "not run", and a worker that left its brief is named.
+- Get done without asking, through a worker, anything simple and reversible: run a test, a `curl`/`nc` health or port check, read a status or log, trigger an already-approved workflow. Ask the user only for irreversible or data-losing steps, pushes (standing rule), and what only they can do (credentials, purchases, decisions). Never hand the user a checklist a worker could run.
+
+## Pause and resume
+
+- Sessions end before plans do (a usage window runs out, context grows expensive). At each phase start, and when the routing usage check returns `ask` because every account is near its limit, finish in-flight jobs, then pause.
+- To pause, follow `parallel-agent-development` "Pausing and resuming": overwrite the plan's one `handoff.md` beside its `progress.md` in the plan's workspace (never a second or dated copy), then give the user a paste-ready resume prompt. A resumed session reads `handoff.md`, `progress.md` and `git log` first, and never redoes finished work.
