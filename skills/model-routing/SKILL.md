@@ -1,6 +1,6 @@
 ---
 name: model-routing
-description: Use when about to spawn a subagent or Codex job, or when asked how work was routed or what it cost. Picks the model across Claude (Haiku, Sonnet, Opus, Fable) and ChatGPT via Codex (Luna, Sol, Astra), with the conductor's own model as the ceiling, on the account with the most usage left.
+description: Use when about to spawn a subagent or Codex job, or when asked how work was routed or what it cost. Picks the model across Claude (Haiku, Sonnet, Opus, Fable) and ChatGPT via Codex (Luna, Sol, Astra), with the conductor's own model as the ceiling, and balances usage between the accounts: the conductor's own provider first, the other once it passes 60% of its 5-hour window. Applies whichever provider conducts (Claude Code, Codex, Gemini).
 ---
 
 # Model routing
@@ -9,7 +9,7 @@ Choose the cheapest permitted model expected to meet the job's acceptance criter
 
 Paths below (`scripts/`, `references/`) are relative to this skill's folder: the base directory shown when the skill loads, typically `.claude/skills/model-routing/` in a project or `~/.claude/skills/model-routing/` when installed globally. Run the scripts from the repo root.
 
-Each spawn is three decisions: the tier (from the job), the ceiling (from your own model), the provider (from usage left).
+Each spawn is three decisions: the tier (from the job), the ceiling (from your own model), the provider (from the user, then capability, then usage).
 
 ## Tiers and ceiling
 
@@ -20,19 +20,32 @@ Each spawn is three decisions: the tier (from the job), the ceiling (from your o
 | 3 Frontier  | Opus 5.5   | `gpt-6-astra` (GPT-6 Astra)                                       | frontier                               |
 | 4 Top       | Fable      | none                                                              | —                                      |
 
-**Each row is interchangeable.** Astra stands in for Opus, Sol for Sonnet, Luna for Haiku, and the other way round: a job routed to a tier may run on either provider, chosen by the user's stated preference, else by usage (below), and a reviewer on one counts the same as on the other. Terra and older GPT models are not routed; their tier is unverified. If Codex rejects a slug, tell the user.
+**Each row is interchangeable.** Astra stands in for Opus, Sol for Sonnet, Luna for Haiku, and the other way round: a job routed to a tier may run on either provider, chosen by the rules under Provider below, and a reviewer on one counts the same as on the other. Terra and older GPT models are not routed; their tier is unverified. If Codex rejects a slug, tell the user.
 
 **Tier 3 on ChatGPT (user's default, 2026-11-10):** run Astra at `--effort medium`; when Astra is rate-limited or the ChatGPT window is too low for it, fall back to Sol at `--effort high` for that job. Evidence, one side-by-side test so far: the same whole-branch review run three ways found the same findings each time, at these costs in the 5-hour window: Astra high +8%, Astra medium +7%, Sol high +3% (Sol took twice the steps). Earlier, three high-effort Astra plan reviews used a whole window. Re-run the comparison on the next large review and record the result here before changing this default.
 
-Your own model is the ceiling on both providers: Sonnet allows tiers 1–2, Opus 1–3, Fable 1–4 (tier 4 only with a stated reason, after tier 3 failed or could not settle a call). Read your model from your own context, not the agent file. Never exceed the ceiling silently; say "needs a higher tier" to the user instead.
+Your own model is the ceiling on both providers: Sonnet or Sol allows tiers 1–2, Opus or Astra 1–3, Fable 1–4 (tier 4 only with a stated reason, after tier 3 failed or could not settle a call). A conductor on another provider takes the ceiling of the row its model matches in strength. Read your model from your own context, not the agent file. Never exceed the ceiling silently; say "needs a higher tier" to the user instead.
 
 ## Provider
 
-The user's direction comes first. When the user names a provider for the session or a job ("mostly Claude", "Codex only"), use it at the job's tier; when that provider has no headroom left, ask before switching. Without a direction, the usage check below decides.
+Decide in this order:
 
-Run `python3 <skill folder>/scripts/check-account-usage.py` at intake and at the start of each phase. It reads both accounts without spending a model turn and prints each one's used windows, `headroom` (100 minus the fuller window) and a `pick`: the account with more headroom, Claude when within 10 points, and never an account at 10 or less while the other has room. `"ask"` means one account could not be read: ask the user once.
+1. **The user's direction.** When the user names a provider or model for the session or a job ("mostly Claude", "Codex only", "use Astra"), use it at the job's tier; when that account is near its limit, ask before switching.
+2. **Capability.** A job that needs something only one provider has goes there, whatever the usage. Image generation goes to ChatGPT, because Claude cannot generate images.
+3. **Usage balance.** Prefer your own provider: a Claude conductor spawns Claude agents, a Codex conductor ChatGPT jobs. Once your provider has used 60% of its 5-hour window, send new jobs to the other provider; when the other one passes 60% instead, come back. The rest of your own window is the conductor's reserve: you run on that account too, and when it runs dry the whole session stops, however much the other account has left.
 
-A job that stops on a usage limit is relaunched at the same tier on the other provider. For Codex jobs, `cat <skill folder>/references/use-codex.md` once per session.
+Run `python3 <skill folder>/scripts/check-account-usage.py --conductor <claude|chatgpt|gemini>` at intake and at each new request from the user; inside Claude Code the conductor is detected and the flag can be left out. It reads both accounts without spending a model turn and prints each one's 5-hour and weekly use, a `pick` and the `why`:
+
+- your own provider while it is under 60% of its 5-hour window;
+- otherwise the other provider with room, lowest 5-hour use first; with both past 60%, still the other one, so your reserve holds;
+- an account at 90% of either window, or blocked, only when nothing else has room;
+- `"ask"` when your own account cannot be read or every account is near a limit: ask the user once.
+
+A conductor whose own usage the script cannot read (Gemini today) has no reserve to keep; its jobs go to the provider with the lower 5-hour use.
+
+In Claude Code, `scripts/usage-before-spawn.py` registered as a PreToolUse hook (the settings snippet is at its top) repeats the check before every Agent spawn and every `run-codex-job.py` launch, and adds one line to your context: both accounts, the pick, and whether this spawn matches it. The hook never blocks: a spawn that differs from the pick is right when rule 1 or 2 put it there, and otherwise a sign to switch.
+
+A job that stops on a usage limit is relaunched at the same tier on the other provider. Codex jobs run outside the sandbox, with network, tests and local containers, as a Claude agent does. For Codex jobs, `cat <skill folder>/references/use-codex.md` once per session.
 
 ## Review rule
 

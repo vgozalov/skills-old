@@ -1,27 +1,30 @@
 #!/usr/bin/env python3
-"""Print how much usage is left on the Claude and ChatGPT accounts, and which one to use next.
+"""Print how much of each account's usage is spent, and which provider the next job should use.
 
 Neither check spends a model turn: Claude is read from `claude -p /usage`, ChatGPT from the
-Codex app-server.
+Codex app-server. The conductor's own provider is preferred until it has used
+SWITCH_AT_5H_USED percent of its 5-hour window; past that, jobs move to another provider so
+the conductor keeps the rest for its own turns.
 """
+import argparse
+import fcntl
 import json
+import os
 import queue
 import re
 import subprocess
+import sys
 import tempfile
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 
 TIMEOUT_SECONDS = 60
-CLOSE_CALL_POINTS = 10
-NEAR_LIMIT_HEADROOM = 10
+SWITCH_AT_5H_USED = 60
+NEAR_LIMIT_USED = 90
+CACHE_PATH = os.path.join(tempfile.gettempdir(), "model-routing-usage.json")
 CLAUDE_WINDOW_LINE = re.compile(r"^Current (.+?): (\d+(?:\.\d+)?)% used", re.MULTILINE)
 CLAUDE_WINDOW_NAMES = {"session": "5h", "week (all models)": "week"}
-
-
-def headroom(used_values):
-    return None if not used_values else round(100 - max(used_values), 1)
 
 
 def read_claude():
@@ -35,15 +38,15 @@ def read_claude():
         )
         report = json.loads(completed.stdout).get("result") or ""
     except (OSError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
-        return {"headroom": None, "reason": f"claude /usage unreadable: {error}"}
+        return {"error": f"claude /usage unreadable: {error}"}
 
     windows = {
         CLAUDE_WINDOW_NAMES.get(label.strip(), label.strip()): float(used)
         for label, used in CLAUDE_WINDOW_LINE.findall(report)
     }
-    if not windows:
-        return {"headroom": None, "reason": "claude /usage reported no subscription windows"}
-    return {**windows, "headroom": headroom(list(windows.values()))}
+    if "5h" not in windows:
+        return {"error": "claude /usage reported no 5-hour window"}
+    return windows
 
 
 def request_codex_rate_limits():
@@ -86,10 +89,10 @@ def read_chatgpt():
     try:
         response = request_codex_rate_limits()
     except OSError as error:
-        return {"headroom": None, "reason": f"codex not runnable: {error}"}
+        return {"error": f"codex not runnable: {error}"}
     result = (response or {}).get("result")
     if not result:
-        return {"headroom": None, "reason": "no answer from codex app-server"}
+        return {"error": "no answer from codex app-server"}
 
     limits = result.get("rateLimits") or {}
     now = time.time()
@@ -98,34 +101,105 @@ def read_chatgpt():
         if window and window.get("usedPercent") is not None:
             reset_passed = window.get("resetsAt") and window["resetsAt"] <= now
             windows[name] = 0.0 if reset_passed else float(window["usedPercent"])
-    blocked = result.get("ordinaryUsageAllowed") is False or bool(limits.get("rateLimitReachedType"))
-    return {**windows, "headroom": 0.0 if blocked else headroom(list(windows.values()))}
+    if "5h" not in windows:
+        return {"error": "codex app-server reported no 5-hour window"}
+    if result.get("ordinaryUsageAllowed") is False or limits.get("rateLimitReachedType"):
+        windows["blocked"] = True
+    return windows
 
 
-def pick_account(claude_headroom, chatgpt_headroom):
-    if claude_headroom is None:
-        return "ask" if chatgpt_headroom is not None else "claude"
-    if chatgpt_headroom is None:
-        return "claude"
-    if chatgpt_headroom <= NEAR_LIMIT_HEADROOM < claude_headroom:
-        return "claude"
-    if claude_headroom <= NEAR_LIMIT_HEADROOM < chatgpt_headroom:
-        return "chatgpt"
-    if abs(claude_headroom - chatgpt_headroom) < CLOSE_CALL_POINTS:
-        return "claude"
-    return "claude" if claude_headroom > chatgpt_headroom else "chatgpt"
+READERS = {"claude": read_claude, "chatgpt": read_chatgpt}
+
+
+def read_usage(max_age, cache_path=CACHE_PATH, readers=READERS):
+    """Readings for every provider, reusing a cached set younger than max_age seconds."""
+
+    def cached():
+        try:
+            if time.time() - os.path.getmtime(cache_path) < max_age:
+                with open(cache_path, encoding="utf-8") as handle:
+                    return json.load(handle)
+        except (OSError, json.JSONDecodeError):
+            pass
+        return None
+
+    readings = cached()
+    if readings is not None:
+        return readings
+    with open(cache_path + ".lock", "w") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        readings = cached()
+        if readings is None:
+            with ThreadPoolExecutor(max_workers=len(readers)) as pool:
+                futures = {name: pool.submit(reader) for name, reader in readers.items()}
+                readings = {name: future.result() for name, future in futures.items()}
+            temporary = f"{cache_path}.{os.getpid()}"
+            with open(temporary, "w", encoding="utf-8") as handle:
+                json.dump(readings, handle)
+            os.replace(temporary, cache_path)
+    return readings
+
+
+def detect_conductor(environment):
+    return "claude" if environment.get("CLAUDECODE") == "1" else None
+
+
+def is_readable(reading):
+    return bool(reading) and reading.get("5h") is not None
+
+
+def has_room(reading):
+    return is_readable(reading) and not reading.get("blocked") and max(reading["5h"], reading.get("week", 0)) < NEAR_LIMIT_USED
+
+
+def describe(name, reading):
+    if not is_readable(reading):
+        return f"{name} unreadable"
+    blocked = ", blocked" if reading.get("blocked") else ""
+    return f"{name} at {reading['5h']:g}% of its 5-hour window, {reading.get('week', 0):g}% of its week{blocked}"
+
+
+def pick_provider(readings, conductor):
+    """Return (provider or "ask", reason) for the next job."""
+    own = readings.get(conductor)
+    if conductor in readings and not is_readable(own):
+        return "ask", f"the conductor's own usage is unreadable: {(own or {}).get('error', 'no reading')}"
+
+    if has_room(own) and own["5h"] < SWITCH_AT_5H_USED:
+        return conductor, f"{describe(conductor, own)}; the conductor's provider is used below {SWITCH_AT_5H_USED}%"
+
+    others = sorted(
+        (name for name, reading in readings.items() if name != conductor and has_room(reading)),
+        key=lambda name: readings[name]["5h"],
+    )
+    if others:
+        chosen = others[0]
+        if conductor in readings:
+            reason = f"{describe(conductor, own)}, past the {SWITCH_AT_5H_USED}% switch point or near a limit; {describe(chosen, readings[chosen])}"
+        else:
+            reason = f"{describe(chosen, readings[chosen])}, the lowest 5-hour use"
+        return chosen, reason
+
+    if has_room(own):
+        return conductor, f"{describe(conductor, own)}; no other provider has room"
+    return "ask", "; ".join(describe(name, reading) for name, reading in readings.items()) + "; every provider is near a limit"
 
 
 def main():
-    with ThreadPoolExecutor(max_workers=2) as pool:
-        claude_future, chatgpt_future = pool.submit(read_claude), pool.submit(read_chatgpt)
-        claude, chatgpt = claude_future.result(), chatgpt_future.result()
-    print(json.dumps({
-        "claude": claude,
-        "chatgpt": chatgpt,
-        "pick": pick_account(claude["headroom"], chatgpt["headroom"]),
-    }))
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--conductor", help="provider the conductor runs on: claude, chatgpt, gemini, ... (auto-detected inside Claude Code)")
+    parser.add_argument("--max-age", type=float, default=0, help="reuse a cached reading younger than this many seconds")
+    args = parser.parse_args()
+
+    conductor = args.conductor or detect_conductor(os.environ)
+    if not conductor:
+        print("pass --conductor <provider you run on>, e.g. --conductor chatgpt", file=sys.stderr)
+        return 2
+    readings = read_usage(args.max_age)
+    pick, why = pick_provider(readings, conductor)
+    print(json.dumps({"conductor": conductor, **readings, "pick": pick, "why": why}))
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

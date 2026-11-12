@@ -126,7 +126,7 @@ curl -fsSL https://raw.githubusercontent.com/vgozalov/skills/main/install.sh | b
 | <img src="./assets/marker-parallel-briefs.svg" width="44" alt=""><br>[**parallel-briefs**](./skills/parallel-briefs/SKILL.md)                                  | Splits work across several agents outside a plan. Each gets a brief: your files, do not touch, read first, and what to do when shared code is missing.                                               |
 | <img src="./assets/marker-wrap-up.svg" width="44" alt=""><br>[**wrap-up**](./skills/wrap-up/SKILL.md)                                                          | Ends a session: feedback, learnings, the day's memory file, a one-line "Last Session" pointer, and the docs commit.                                                                                  |
 | <img src="./assets/marker-create-sprint.svg" width="44" alt=""><br>[**create-sprint**](./skills/create-sprint/SKILL.md)                                        | Turns a written plan into a verification sprint, a `prod.json` acceptance harness, from its bundled example.                                                                                         |
-| [**model-routing**](./skills/model-routing/SKILL.md) | Picks the model for each delegated job across Claude and ChatGPT (Codex): the cheapest tier that can do it, never above the conductor's own model, on the account with the most usage left. Ships usage and Codex-launch scripts. |
+| [**model-routing**](./skills/model-routing/SKILL.md) | Picks the model for each delegated job across Claude and ChatGPT (Codex): the cheapest tier that can do it, never above the conductor's own model. Jobs stay on the conductor's own provider until it has used 60% of its 5-hour window, then move to the other, so the conductor never runs dry mid-session. Ships usage, Codex-launch and pre-spawn hook scripts. |
 
 ## The conductor agent
 
@@ -146,7 +146,9 @@ It defaults to Opus; started on Sonnet it runs as a Sonnet conductor with a lowe
 <summary><b>What model-routing needs on the machine</b></summary>
 <br>
 
-- `python3` for the two scripts in `skills/model-routing/scripts/`.
+- `python3` for the scripts in `skills/model-routing/scripts/`.
+- Recommended for Claude Code: register `usage-before-spawn.py` as a PreToolUse hook (the settings snippet is at the top of the script). Before every agent spawn and Codex job it adds both accounts' usage and the routing pick to the conductor's context. It never blocks a spawn.
+- Codex jobs run outside Codex's sandbox by default (`--sandbox danger-full-access`), so they can run tests, reach the network and use local containers like a Claude agent. Pass `--sandbox workspace-write` to fence one.
 - The `claude` CLI, logged in with a Claude subscription: Claude usage is read from `claude -p "/usage"`, a local command that spends no tokens.
 - For ChatGPT workers, the Codex CLI (`codex`) logged in with ChatGPT. Usage is read from its local app-server, and jobs run through `codex exec`. Without Codex the skill still routes everything to Claude.
 - Keep project rules in `AGENTS.md` with `CLAUDE.md` symlinked to it, so Claude and Codex workers load the same rules without them being pasted into every brief.
